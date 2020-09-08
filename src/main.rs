@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::io;
+mod syntax;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -38,5 +39,6 @@ fn process_file(fl: DynFlags) -> io::Result<()> {
 
 fn parse_file(_buf: &std::io::BufReader<std::fs::File>) -> syntax::Terms {
     use syntax::Terms;
+
     Vec::new()
 }
