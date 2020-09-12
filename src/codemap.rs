@@ -148,6 +148,13 @@ impl Span {
         lo: Pos(std::u64::MAX),
         hi: Pos(std::u64::MIN),
     };
+
+    pub fn lo_as_usize(&self) -> usize {
+        self.lo.0 as usize
+    }
+    pub fn hi_as_usize(&self) -> usize {
+        self.hi.0 as usize
+    }
 }
 impl std::fmt::Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -155,7 +162,7 @@ impl std::fmt::Display for Span {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct Spanned<T> {
     pub node: T,
     pub span: Span,

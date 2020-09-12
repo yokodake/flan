@@ -1,4 +1,4 @@
-//! The syntax module
+//! The Lexer module
 //!
 //! There are 4 meaningful tokens, anything else is considered text:
 //! - `#{` variants opening delimiter
@@ -173,11 +173,22 @@ pub const ENDVAR: char = '#';
 // e.g. #$Key# = #{ $HOME ## foo_bar ## }#
 
 pub type Token = Spanned<TokenK>;
-pub type Name = String;
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+
+impl Token {
+    pub fn is_eof(&self) -> bool {
+        self.node == EOF
+    }
+    pub fn is(&self, k: TokenK) -> bool {
+        self.node == k
+    }
+    pub fn kind(&self) -> TokenK {
+        self.node
+    }
+}
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub enum TokenK {
     Text,
-    /// `#$identifier`
+    /// `#$identifier#`
     Var,
     /// `#{`
     Openv,
