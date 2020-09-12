@@ -174,10 +174,9 @@ impl Handler {
     /// prints all the delayed errors
     pub fn print_all(&mut self) {
         // FIXME pop instead
-        for e in self.delayed_err.iter() {
-            Self::print_explicit(&self.flags, &mut self.printed_err, e.clone());
+        while let Some(e) = self.delayed_err.pop() {
+            Self::print_explicit(&self.flags, &mut self.printed_err, e);
         }
-        self.delayed_err.clear()
     }
     /// delay error reporting for later
     pub fn delay(&mut self, err: Error) {
