@@ -231,12 +231,14 @@ impl<'a> ErrorBuilder<'a> {
         self
     }
     /// consumes the builder and prints an error
-    pub fn print(self) {
-        self.handler.print(self.mk_error())
+    pub fn print(mut self) {
+        let e = self.mk_error();
+        self.handler.print(e)
     }
     /// consumes the builder and delays error reporting in the handler
-    pub fn delay(self) {
-        self.handler.delay(self.mk_error())
+    pub fn delay(mut self) {
+        let e = self.mk_error();
+        self.handler.delay(e)
     }
 
     fn add_extra(&mut self, msg: String) {
@@ -245,15 +247,18 @@ impl<'a> ErrorBuilder<'a> {
         }
         self.messages.push(msg);
     }
-    fn mk_error(&self) -> Error {
-        let (m, exs) = match self.messages.split_first() {
-            Some((h, tl)) => (h.clone(), tl.to_vec()),
-            None => (String::from(""), Vec::new()),
+    fn mk_error(&mut self) -> Error {
+        let mut messages = Vec::new();
+        std::mem::swap(&mut messages, &mut self.messages);
+        let m = match messages.len() {
+            0 => String::from(""),
+            1 => messages.pop().unwrap(),
+            _ => messages.swap_remove(0),
         };
         Error {
             level: self.level,
             msg: m,
-            extra: exs,
+            extra: messages,
             span: self.span.unwrap_or(Span::MEMPTY),
         }
     }
