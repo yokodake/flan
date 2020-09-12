@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::io;
 
-use flan::syntax;
+// use flan::syntax;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -25,7 +25,7 @@ fn parse_args(args: Vec<String>) -> DynFlags {
 struct DynFlags {
     in_fn: String,
     out_fn: String,
-    vars: HashMap<syntax::Name, String>,
+    vars: HashMap<String, String>,
 }
 
 #[allow(dead_code)]

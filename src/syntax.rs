@@ -7,12 +7,14 @@
 //! - `#$IDENTIFIER#` variables where IDENTIFIER is made of alphanumeric characters or `!%&'*+-./:<=>?@_`
 //!
 //! There are two escapes (`\#` and `\\`), separators (`##`) need not to be escaped *outside* of variants.
+//! @NOTE escape newlines inside of variants?
 
 #![allow(dead_code)]
 use core::str::Chars;
 
 use crate::codemap::{span, Pos, Spanned};
-use crate::error;
+use crate::error::Handler;
+use crate::utils::*;
 
 /// a `Lexer` is wrapper around a Buffered Reader
 /// a stream of tokens is just like an iterator, so calling `next()` should yield the next token from the source.
@@ -21,19 +23,23 @@ pub struct Lexer<'a> {
     /// current position in the reader, helps for Spanned<>
     pos: Pos,
     /// number of Open Variant Delimiters
-    nesting: usize, // @NOTE usize is probably overkill
+    nest: usize, // @NOTE usize is probably overkill
+    handler: Box<Handler>,
 }
 
-/// static items are not allowed inside implementations
-static var_syms: &str = "!%&'*+-./:<=>?@_";
+// static items are not allowed inside implementations
+static VAR_SYMS: [char; 16] = [
+    '!', '%', '&', '\'', '*', '+', '-', '.', '/', ':', '<', '=', '>', '?', '@', '_',
+];
 
 impl<'a> Lexer<'a> {
-    fn new(input: &'a str) -> Lexer<'a> {
+    fn new(input: &'a str, h: Box<Handler>) -> Lexer<'a> {
         Lexer {
             src: input.chars(),
             /// current position, therefore the index of the result of getc()
             pos: Pos::from(0),
-            nesting: 0,
+            nest: 0,
+            handler: h,
         }
     }
     /// get the next character without consuming it
@@ -46,7 +52,7 @@ impl<'a> Lexer<'a> {
     }
     /// consumes and
     fn getc(&mut self) -> Option<char> {
-        self.src.next()
+        self.src.next().sequence(|_| self.pos += 1)
     }
     /// returns the next token
     pub fn next_token(&mut self) -> Token {
@@ -60,7 +66,7 @@ impl<'a> Lexer<'a> {
                     '{' => return self.lex_openv(start),
                     '$' => return self.lex_var(start),
                     '#' => {
-                        if self.nesting > 0 {
+                        if self.nest > 0 {
                             return self.lex_separator(start);
                         } else {
                             // separators have no meaning outside of variants, therefore we can skip them.
@@ -84,37 +90,73 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn is_varsymbol(c: char) -> bool {
-        c.is_alphanumeric() || var_syms.contains(c)
+        c.is_alphanumeric() || VAR_SYMS.contains(&c)
     }
 
     pub fn lex_var(&mut self, start: Pos) -> Token {
+        let mut err = false;
         self.getc(); // eat the '$'
         while let Some(c) = self.getc() {
             if Self::is_varsymbol(c) {
                 continue;
             } else if c == '#' {
                 return Token::new(Var, start, self.pos);
-            } else {
-                todo!("lex_var: error");
+            } else if c.is_whitespace() {
+                self.handler
+                    .error("Non-terminated variable. Expected `#`, Found whitespace instead.")
+                    .with_span(span(start, self.pos))
+                    .note("Variables have the following syntax: #$variable#")
+                    .print();
+                self.handler.abort();
+            } else if !err {
+                // if we get none whitespace illegal characters, and the variable token is still correctly terminated
+                // we can recover, maybe
+                self.handler
+                    .error(format!("Unexpected `{}` in variable name.", c).as_ref())
+                    .with_span(span(start, self.pos))
+                    .note(Self::identifier_note().as_ref())
+                    .print();
+                err = true;
             }
         }
-        // @TODO error reporting
-        todo!("lex_var: error")
+        self.handler
+            .error("Non-terminated variable, expected `#`.")
+            .with_span(span(start, self.pos))
+            .note("Variables have the following syntax: #$variable#")
+            .print();
+        self.handler.abort();
     }
     pub fn lex_openv(&mut self, start: Pos) -> Token {
         self.getc(); // eat the '{'
-        self.nesting += 1;
+        self.nest += 1;
         Token::new(Openv, start, self.pos)
     }
     pub fn lex_closev(&mut self, start: Pos) -> Token {
         self.getc(); // eat the '#'
 
-        self.nesting -= 1; // @FIXME check whether we're not negative
+        // prevent underflow. The parser will catch the error.
+        self.nest = std::cmp::max(self.nest - 1, 0);
         Token::new(Openv, start, self.pos)
     }
     pub fn lex_separator(&mut self, start: Pos) -> Token {
         self.getc(); // eat the '#'
         Token::new(Sepv, start, self.pos)
+    }
+
+    fn identifier_note() -> String {
+        // 'a'','' ' for every element minus ", " for last element
+        let mut verbose_varsym = String::with_capacity((VAR_SYMS.len() * 5) - 2);
+        verbose_varsym.push('`');
+        verbose_varsym.push(VAR_SYMS[0]);
+        for x in VAR_SYMS[1..].iter() {
+            verbose_varsym.push_str("`, `");
+            verbose_varsym.push(*x);
+        }
+        verbose_varsym.push('`');
+        format!(
+            "Legal characters for variable identifiers are alphanumeric chars or one of {}.",
+            verbose_varsym
+        )
     }
 }
 
