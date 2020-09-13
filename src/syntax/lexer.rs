@@ -1,10 +1,10 @@
 //! The Lexer module
 //!
 //! There are 4 meaningful tokens, anything else is considered text:
-//! - `#{` variants opening delimiter
+//! - `#VARID{` variants opening delimiter where `VARID` is made of alphanumeric and underscore `_`
 //! - `##` variants element separator
 //! - `}#` veriants closing delimiter
-//! - `#$IDENTIFIER#` variables where IDENTIFIER is made of alphanumeric characters or `!%&'*+-./:<=>?@_`
+//! - `#$IDENTIFIER#` variables where `IDENTIFIER` is made of alphanumeric characters or `!%&'*+-./:<=>?@_`
 //!
 //! There are two escapes (`\#` and `\\`), separators (`##`) need not to be escaped *outside* of variants.
 //! @NOTE escape newlines inside of variants?
@@ -75,6 +75,10 @@ impl<'a> Lexer<'a> {
                             // @TODO if peek1 + peek2 is a meaningful token emit warning for not escaping current token.
                         }
                     }
+                    c if c.is_alphanumeric() => match self.lex_openv_maybe(start) {
+                        Some(t) => return t,
+                        None => continue,
+                    },
                     _ => continue,
                 },
                 '}' => {
@@ -145,6 +149,19 @@ impl<'a> Lexer<'a> {
     pub fn lex_separator(&mut self, start: Pos) -> Token {
         self.getc(); // eat the '#'
         Token::new(Sepv, start, self.pos)
+    }
+    pub fn lex_openv_maybe(&mut self, start: Pos) -> Option<Token> {
+        while let Some(c) = self.getc() {
+            if c.is_alphanumeric() || c == '_' {
+                continue;
+            } else if c == '{' {
+                self.getc(); // eat '{'
+                return Some(Token::new(Openv, start, self.pos));
+            } else {
+                return None;
+            }
+        }
+        None
     }
 
     fn identifier_note() -> String {
