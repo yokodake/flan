@@ -4,7 +4,7 @@ pub enum PError {
     UnexpectedToken,
     NonTerminatedToken,
     IllegalCharacter,
-    UnmatchedBracket,
+    UnclosedDelimiter,
     UnexpectedEOF,
     FatalError,
 }

@@ -25,7 +25,7 @@ pub struct Lexer<'a> {
     pos: Pos,
     /// number of Open Variant Delimiters
     nest: usize, // @NOTE usize is probably overkill
-    handler: &'a mut Handler<PError>,
+    pub handler: &'a mut Handler<PError>,
 }
 
 // static items are not allowed inside implementations
@@ -38,7 +38,7 @@ impl<'a> Lexer<'a> {
         Lexer {
             src: input.chars(),
             /// current position, therefore the index of the result of getc()
-            pos: Pos::from(0),
+            pos: Pos::from(0 as usize),
             nest: 0,
             handler: h,
         }
@@ -77,7 +77,7 @@ impl<'a> Lexer<'a> {
                     }
                     c if c.is_alphanumeric() => match self.lex_openv_maybe(start) {
                         Some(t) => return t,
-                        None => continue,
+                        None => continue, // FIXME
                     },
                     _ => continue,
                 },
@@ -207,6 +207,11 @@ impl Token {
     }
     pub fn kind(&self) -> TokenK {
         self.node
+    }
+}
+impl Default for Token {
+    fn default() -> Token {
+        Token::new(EOF, Pos::from(0 as u64), Pos::from(0 as u64))
     }
 }
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
