@@ -1,42 +1,41 @@
-use std::collections::HashMap;
 use std::env;
 use std::io;
+use std::path::PathBuf;
+
+use structopt::StructOpt;
 
 // use flan::syntax;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    parse_args(args);
+    let opt = Opt::from_args();
+    println!("{:?}", opt);
 }
 
-fn parse_args(args: Vec<String>) -> DynFlags {
-    let mut h = HashMap::new();
-    if args.len() > 4 {
-        h.insert(args[3].clone(), args[4].clone());
-    }
-    DynFlags {
-        in_fn: args[1].clone(),
-        out_fn: args[2].clone(),
-        vars: h,
-    }
+#[derive(StructOpt, Clone, PartialEq, Eq, Debug)]
+#[structopt(version = "0.1", rename_all = "kebab-case")]
+struct Opt {
+    #[structopt(long)]
+    /// overwrite existing destination files
+    force: bool,
+    #[structopt(long)]
+    /// run without substituting the files.
+    dry_run: bool,
+    #[structopt(long)]
+    /// ignore all warnings
+    no_warn: bool,
+    #[structopt(short = "z", long)]
+    /// silence all errors and warnings
+    silence: bool,
+    #[structopt(short, long)]
+    /// explain what is being done
+    verbose: bool,
+    #[structopt(name = "PATH", short = "c", long = "config")]
+    /// use this config file instead
+    config_file: Option<PathBuf>,
+    #[structopt(name = "OUTPUT", short = "o", long = "output", parse(from_os_str))]
+    /// destination file
+    file_out: Option<PathBuf>,
+    #[structopt(name = "INPUT")]
+    /// source file
+    file_in: PathBuf,
 }
-
-#[allow(dead_code)]
-struct DynFlags {
-    in_fn: String,
-    out_fn: String,
-    vars: HashMap<String, String>,
-}
-
-#[allow(dead_code)]
-fn process_file(fl: DynFlags) -> io::Result<()> {
-    use std::fs::File;
-    use std::io::{BufRead, BufReader};
-    let mut b = File::open(fl.in_fn).and_then(|f| Ok(BufReader::new(f)))?;
-    let mut r: Vec<u8> = Vec::new();
-    b.read_until(b'&', &mut r)?;
-    Ok(())
-}
-
-#[allow(dead_code)]
-fn parse_file(_buf: &std::io::BufReader<std::fs::File>) {}
