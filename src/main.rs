@@ -34,8 +34,9 @@ fn process_file(fl: DynFlags) -> io::Result<()> {
     use std::io::{BufRead, BufReader};
     let mut b = File::open(fl.in_fn).and_then(|f| Ok(BufReader::new(f)))?;
     let mut r: Vec<u8> = Vec::new();
-    b.read_until(b'&', &mut r);
+    b.read_until(b'&', &mut r)?;
     Ok(())
 }
 
+#[allow(dead_code)]
 fn parse_file(_buf: &std::io::BufReader<std::fs::File>) {}

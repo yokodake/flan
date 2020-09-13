@@ -1,6 +1,7 @@
+#![feature(option_result_contains)]
 pub mod utils;
 
-pub mod codemap;
+pub use utils::codemap;
 
 pub mod error;
 

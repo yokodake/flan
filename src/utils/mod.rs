@@ -1,3 +1,5 @@
+pub mod codemap;
+
 pub trait Sequenceable<T> {
     fn sequence<F: FnOnce(&T) -> ()>(self, f: F) -> Self;
 }

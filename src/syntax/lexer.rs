@@ -14,6 +14,7 @@ use core::str::Chars;
 
 use crate::codemap::{span, Pos, Spanned};
 use crate::error::Handler;
+use crate::syntax::errors::PError;
 use crate::utils::*;
 
 /// a `Lexer` is wrapper around a Buffered Reader
@@ -24,7 +25,7 @@ pub struct Lexer<'a> {
     pos: Pos,
     /// number of Open Variant Delimiters
     nest: usize, // @NOTE usize is probably overkill
-    handler: Box<Handler>,
+    handler: &'a mut Handler<PError>,
 }
 
 // static items are not allowed inside implementations
@@ -33,7 +34,7 @@ static VAR_SYMS: [char; 16] = [
 ];
 
 impl<'a> Lexer<'a> {
-    fn new(input: &'a str, h: Box<Handler>) -> Lexer<'a> {
+    pub fn new(input: &'a str, h: &'a mut Handler<PError>) -> Lexer<'a> {
         Lexer {
             src: input.chars(),
             /// current position, therefore the index of the result of getc()
@@ -104,6 +105,7 @@ impl<'a> Lexer<'a> {
             } else if c.is_whitespace() {
                 self.handler
                     .error("Non-terminated variable. Expected `#`, Found whitespace instead.")
+                    .with_kind(PError::NonTerminatedToken)
                     .with_span(span(start, self.pos))
                     .note("Variables have the following syntax: #$variable#")
                     .print();
@@ -113,6 +115,7 @@ impl<'a> Lexer<'a> {
                 // we can recover, maybe
                 self.handler
                     .error(format!("Unexpected `{}` in variable name.", c).as_ref())
+                    .with_kind(PError::IllegalCharacter)
                     .with_span(span(start, self.pos))
                     .note(Self::identifier_note().as_ref())
                     .print();
@@ -121,6 +124,7 @@ impl<'a> Lexer<'a> {
         }
         self.handler
             .error("Non-terminated variable, expected `#`.")
+            .with_kind(PError::NonTerminatedToken)
             .with_span(span(start, self.pos))
             .note("Variables have the following syntax: #$variable#")
             .print();
@@ -176,7 +180,10 @@ pub type Token = Spanned<TokenK>;
 
 impl Token {
     pub fn is_eof(&self) -> bool {
-        self.node == EOF
+        self.is(EOF)
+    }
+    pub fn is_not_sum(&self) -> bool {
+        self.is(Var) || self.is(Text)
     }
     pub fn is(&self, k: TokenK) -> bool {
         self.node == k

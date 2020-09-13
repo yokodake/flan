@@ -1,3 +1,4 @@
+mod errors;
 mod lexer;
 mod parser;
-pub use lexer::{Lexer, Token, TokenK};
+// pub use lexer::{Lexer, Token, TokenK};

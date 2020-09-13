@@ -1,5 +1,22 @@
+//! The Parsing module
+//!
+//! Aside from variable names, all text parsed is represented as a span to avoid
+//! redundant memory usage (especially if they're big files).
+//! The syntax:
+//! ```bnf
+//! Terms := Term*
+//! Term  := Text
+//!        | #$IDENTIFIER#
+//!        | `#{` Terms (`##` Terms)* `}#`
+//!
+//! IDENTIFIER := (alphanumeric | [!%&'*+-./:<=>?@_])*
+//! ```
+//! a whole lot of ascii symbols are accepted in identifiers, probably too much, but we can and I figured it might
+//! be interresting to have variables names of paths to contain slashes for example.
+// #![allow(dead_code)]
 use crate::codemap::{Span, Spanned};
-use crate::error::{Error, Handler};
+use crate::error::Handler;
+use crate::syntax::errors::PError;
 use crate::syntax::lexer::{Lexer, Token, TokenK};
 
 /// type of a parsed expression
@@ -7,47 +24,66 @@ type Parsed<T> = Result<T, PError>;
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
-    handler: Box<Handler>,
+    handler: Box<Handler<PError>>,
     current_token: Token,
     src: String,
 }
 impl Parser<'_> {
-    pub fn parse(&mut self) -> Parsed<Term> {
-        // @FIXME -> Parsed<Terms>
-        match self.current_token.kind() {
-            Text => self.parse_txt(),
-            Var => self.parse_var(),
-            Openv => self.parse_sum(),
-            EOF => todo!("end"),
-            _ => todo!("error"),
+    pub fn new<'a>(input: String, mut h: Box<Handler<PError>>) -> Parser<'a> {
+        Parser {
+            lexer: Lexer::new(input.as_ref(), h.as_mut()),
+            handler: h,
+            current_token: todo!(),
+            src: input,
+        }
+    }
+
+    pub fn parse_terms(&mut self) -> Parsed<Terms> {
+        let mut terms = Vec::new();
+        loop {
+            match self.current_token.kind() {
+                TokenK::Text | TokenK::Var => terms.append(&mut self.parse_alt()?),
+                TokenK::Openv => terms.push(self.parse_sum()?),
+                TokenK::EOF => return Ok(terms),
+                _ => todo!("error"),
+            };
+            self.next_token();
         }
     }
     pub fn parse_var(&self) -> Parsed<Term> {
         let lo = self.current_token.span.lo_as_usize();
         let hi = self.current_token.span.hi_as_usize();
         let name = unsafe { self.src.get_unchecked(lo + 2..hi - 2) };
-        Ok(Term::Var(name.into()))
+        Ok(Term::var(name.into(), self.current_token.span))
     }
 
     pub fn parse_txt(&self) -> Parsed<Term> {
-        Ok(Term::Text(self.current_token.span))
+        Ok(Term::text(self.current_token.span))
     }
-    pub fn parse_alt(&self) -> Parsed<Terms> {
-        todo!();
+    pub fn parse_alt(&mut self) -> Parsed<Terms> {
+        let mut xs = Vec::new();
+        while self.current_token.is_not_sum() {
+            let x = match self.current_token.kind() {
+                TokenK::Text => self.parse_txt()?,
+                TokenK::Var => self.parse_var()?,
+                _ => unreachable!(),
+            };
+            xs.push(x);
+            self.next_token();
+        }
+        Ok(xs)
     }
 
     pub fn parse_sum(&mut self) -> Parsed<Term> {
-        if !self.current_token.is(TokenK::Openv) {
-            todo!("error");
-        }
+        let start = self.current_token.span;
         self.next_token(); // openv
         let mut cs = Vec::new();
         loop {
-            let c = self.parse_alt();
+            let c = self.parse_terms()?;
             match self.current_token.kind() {
-                TokenK::Closev => return Ok(Term::Sum { children: cs }),
+                TokenK::Closev => return Ok(Term::sum(cs, start + self.current_token.span)),
                 TokenK::Sepv => {
-                    cs.push(c.unwrap());
+                    cs.push(c);
                     self.next_token();
                 }
                 TokenK::EOF => todo!("error"),
@@ -64,18 +100,30 @@ impl Parser<'_> {
 
 type Name = String;
 type Terms = Vec<Term>;
+type Term = Spanned<TermK>;
+impl Term {
+    pub fn text(s: Span) -> Term {
+        Term {
+            node: TermK::Text,
+            span: s,
+        }
+    }
+    pub fn var(n: Name, s: Span) -> Term {
+        Term {
+            node: TermK::Var(n),
+            span: s,
+        }
+    }
+    pub fn sum(cs: Vec<Terms>, s: Span) -> Term {
+        Term {
+            node: TermK::Sum { children: cs },
+            span: s,
+        }
+    }
+}
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
-pub enum Term {
-    Text(Span),
+pub enum TermK {
+    Text,
     Var(Name),
     Sum { children: Vec<Terms> },
 }
-
-#[derive(Clone, PartialEq, PartialOrd, Eq, Debug, Hash)]
-pub struct PError {
-    error: Option<Error>,
-    kind: PErrorKind,
-}
-
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
-pub enum PErrorKind {}

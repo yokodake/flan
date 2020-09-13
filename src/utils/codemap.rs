@@ -12,6 +12,7 @@ pub enum Source {
     /// we do not need the source for binary files
     Binary,
 }
+#[allow(dead_code)]
 pub struct SrcFile {
     name: String,
     absolute_path: PathBuf,

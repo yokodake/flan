@@ -2,17 +2,17 @@
 //!
 //! @DESIGN The goal is that if an error occurs we continue parsing the rest of the files
 //! but I'm stil not sure whether copying should continue, stop or a rollback should occur.
-
 use std::io;
 
 use crate::codemap::Span;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Debug, Hash)]
-pub struct Error {
+pub struct Error<T> {
     level: Level,
     msg: String,
     span: Span,
     extra: Vec<String>,
+    kind: Option<T>,
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Debug, Hash)]
@@ -23,7 +23,18 @@ pub enum Level {
     Note,
 }
 
-impl Error {
+impl<K: PartialEq> Error<K> {
+    pub fn is(&self, k: K) -> bool {
+        self.kind.contains(&k)
+    }
+}
+impl<K> Error<K> {
+    pub fn has_kind(&self) -> bool {
+        self.kind.is_some()
+    }
+    pub fn kind(&self) -> &K {
+        self.kind.as_ref().unwrap()
+    }
     pub fn is_fatal(&self) -> bool {
         match self.level {
             Level::Fatal(_) => true,
@@ -31,20 +42,22 @@ impl Error {
         }
     }
     /// a general error without any specific location
-    pub fn error_general(msg: String) -> Self {
+    pub fn error_general(k: K, msg: String) -> Self {
         Error {
             level: Level::Error,
             msg: msg,
             span: Span::MEMPTY,
             extra: Vec::new(),
+            kind: Some(k),
         }
     }
-    pub fn error(span: Span, msg: String) -> Self {
+    pub fn error(span: Span, k: K, msg: String) -> Self {
         Error {
             level: Level::Error,
             msg: msg,
             span: span,
             extra: Vec::new(),
+            kind: Some(k),
         }
     }
     pub fn warn_general(msg: String) -> Self {
@@ -53,6 +66,7 @@ impl Error {
             msg: msg,
             span: Span::MEMPTY,
             extra: Vec::new(),
+            kind: None,
         }
     }
     pub fn warn(span: Span, msg: String) -> Self {
@@ -61,6 +75,7 @@ impl Error {
             msg: msg,
             span: span,
             extra: Vec::new(),
+            kind: None,
         }
     }
     pub fn note_general(msg: String) -> Self {
@@ -69,6 +84,7 @@ impl Error {
             msg: msg,
             span: Span::MEMPTY,
             extra: Vec::new(),
+            kind: None,
         }
     }
     pub fn note(span: Span, msg: String) -> Self {
@@ -77,6 +93,7 @@ impl Error {
             msg: msg,
             span: span,
             extra: Vec::new(),
+            kind: None,
         }
     }
     pub fn fatal_unexpected() -> Self {
@@ -85,6 +102,7 @@ impl Error {
             msg: String::from("Unexpected fatal error"),
             span: Span::MEMPTY,
             extra: Vec::new(),
+            kind: None,
         }
     }
     pub fn fatal(err: io::ErrorKind) -> Self {
@@ -93,6 +111,7 @@ impl Error {
             msg: String::from(""),
             span: Span::MEMPTY,
             extra: Vec::new(),
+            kind: None,
         }
     }
     pub fn fatal_msg(msg: String, err: io::ErrorKind) -> Self {
@@ -101,6 +120,7 @@ impl Error {
             msg: msg,
             span: Span::MEMPTY,
             extra: Vec::new(),
+            kind: None,
         }
     }
     /// add extra messages
@@ -117,7 +137,7 @@ impl Error {
         }
     }
 }
-impl std::fmt::Display for Error {
+impl<K> std::fmt::Display for Error<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let i = match self.level {
             Level::Fatal(_) => "FATAL ERROR!",
@@ -153,16 +173,16 @@ pub struct ErrorFlags {
 
 #[derive(Debug)]
 /// an error handler
-pub struct Handler {
+pub struct Handler<K> {
     flags: ErrorFlags,
-    printed_err: Vec<Error>,
+    printed_err: Vec<Error<K>>,
     /// errors than haven't been printed yet, these should be emitted
     /// if we abort (e.g. with a fatal error)
-    delayed_err: Vec<Error>,
+    delayed_err: Vec<Error<K>>,
     // map : srcFileMap, // @TODO
 }
 
-impl Handler {
+impl<K> Handler<K> {
     pub fn abort(&mut self) -> ! {
         self.print_all();
         if cfg!(windows) {
@@ -179,10 +199,10 @@ impl Handler {
         }
     }
     /// delay error reporting for later
-    pub fn delay(&mut self, err: Error) {
+    pub fn delay(&mut self, err: Error<K>) {
         self.delayed_err.push(err);
     }
-    pub fn print(&mut self, err: Error) {
+    pub fn print(&mut self, err: Error<K>) {
         Self::print_explicit(&self.flags, &mut self.printed_err, err)
     }
     /// exists in order to avoid code duplication between `print` and `print_all` due to
@@ -191,32 +211,34 @@ impl Handler {
     /// for e in self.delay_err.iter() { // immutable borrow
     ///   self.print(e) // mutable borrow
     /// ```
-    fn print_explicit(flags: &ErrorFlags, printed: &mut Vec<Error>, err: Error) {
+    fn print_explicit(flags: &ErrorFlags, printed: &mut Vec<Error<K>>, err: Error<K>) {
         // @FIXME better error formatting with source files
         if flags.report_level >= err.levelu8() {
             eprintln!("{}", err);
         }
         printed.push(err);
     }
-    pub fn error<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
+    pub fn error<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a, K> {
         ErrorBuilder {
             handler: self,
             level: Level::Error,
             messages: vec![String::from(msg)],
             span: None,
+            kind: None,
         }
     }
 }
 
-pub struct ErrorBuilder<'a> {
-    handler: &'a mut Handler,
+pub struct ErrorBuilder<'a, K> {
+    handler: &'a mut Handler<K>,
     level: Level,
     /// messages[0] = `Error::message`, the rest are extras
     messages: Vec<String>,
     span: Option<Span>,
+    kind: Option<K>,
 }
 
-impl<'a> ErrorBuilder<'a> {
+impl<'a, K: Copy> ErrorBuilder<'a, K> {
     pub fn note(mut self, msg: &str) -> Self {
         self.add_extra(format!("note: {}", msg));
         self
@@ -228,6 +250,10 @@ impl<'a> ErrorBuilder<'a> {
     /// should we refine or enlarge the span if they're different?
     pub fn with_span(mut self, span: Span) -> Self {
         self.span = Some(span);
+        self
+    }
+    pub fn with_kind(mut self, kind: K) -> Self {
+        self.kind = Some(kind);
         self
     }
     /// consumes the builder and prints an error
@@ -247,7 +273,7 @@ impl<'a> ErrorBuilder<'a> {
         }
         self.messages.push(msg);
     }
-    fn mk_error(&mut self) -> Error {
+    fn mk_error(&mut self) -> Error<K> {
         let mut messages = Vec::new();
         std::mem::swap(&mut messages, &mut self.messages);
         let m = match messages.len() {
@@ -260,6 +286,7 @@ impl<'a> ErrorBuilder<'a> {
             msg: m,
             extra: messages,
             span: self.span.unwrap_or(Span::MEMPTY),
+            kind: self.kind,
         }
     }
 }
