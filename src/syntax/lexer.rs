@@ -72,7 +72,7 @@ impl<'a> Lexer<'a> {
                         } else {
                             // separators have no meaning outside of variants, therefore we can skip them.
                             self.getc();
-                            // @TODO if peek1 + peek2 is a meaningful token emit warning for not escaping current token.
+                            // @TODO if peek1 + peek2 is a meaningful token emit warning for not escaping current token?
                         }
                     }
                     c if c.is_alphanumeric() => match self.lex_openv_maybe(start) {

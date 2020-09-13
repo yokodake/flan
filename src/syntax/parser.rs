@@ -56,6 +56,7 @@ impl Parser<'_> {
     pub fn parse_var(&self) -> Parsed<Term> {
         let lo = self.current_token.span.lo_as_usize();
         let hi = self.current_token.span.hi_as_usize();
+        // @SAFETY span is guaranteed to be valid by lexer
         let name = unsafe { self.src.get_unchecked(lo + 2..hi - 1) };
         Ok(Term::var(name.into(), self.current_token.span))
     }
@@ -80,6 +81,7 @@ impl Parser<'_> {
         let lo = self.current_token.span.lo_as_usize();
         let hi = self.current_token.span.hi_as_usize();
         if self.current_token.span.len() > 2 {
+            // @SAFETY span is guaranteed to be valid by lexer
             Some(unsafe { self.src.get_unchecked(lo + 1..hi - 1) }.into())
         } else {
             None
