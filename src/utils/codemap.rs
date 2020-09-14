@@ -14,10 +14,10 @@ pub enum Source {
 }
 #[allow(dead_code)]
 pub struct SrcFile {
-    name: String,
-    absolute_path: PathBuf,
-    relative_path: PathBuf,
-    src: Source,
+    pub name: String,
+    pub absolute_path: PathBuf,
+    pub relative_path: PathBuf,
+    pub src: Source,
 }
 
 pub type SrcFiles = Vec<Arc<SrcFile>>;

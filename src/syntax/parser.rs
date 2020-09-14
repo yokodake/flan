@@ -199,3 +199,30 @@ pub fn string_to_parser<'a>(h: &'a mut Handler<PError>, str: String) -> Parser<'
     let ts = source_to_stream(h, str.as_ref());
     Parser::new(str, h, ts)
 }
+
+use crate::codemap::SrcFile;
+use std::io;
+pub fn file_to_parser<'a>(h: &'a mut Handler<PError>, src: &mut SrcFile) -> io::Result<Parser<'a>> {
+    use crate::codemap::Source;
+    use std::io::{Error, ErrorKind};
+    // @SPEED stop cloning sources
+    match &src.src {
+        Source::Binary => {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "binary data cannot be parsed",
+            ))
+        }
+        Source::Src(s) => return Ok(string_to_parser(h, s.clone())),
+        Source::NotLoaded => {
+            let s = std::fs::read_to_string(&src.absolute_path)?;
+            src.src = Source::Src(s.clone());
+            return Ok(string_to_parser(h, s));
+        }
+        // process again?
+        Source::Processed => {
+            let s = std::fs::read_to_string(&src.absolute_path)?;
+            return Ok(string_to_parser(h, s));
+        }
+    }
+}
