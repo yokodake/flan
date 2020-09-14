@@ -16,12 +16,11 @@
 //!
 //! A whole lot of ascii symbols are accepted in identifiers, probably too much, but we can and I figured it might
 //! be interresting to have variables names of paths to contain slashes for example.
-// #![allow(dead_code)]
+#![allow(dead_code)]
 use std::collections::VecDeque;
-use std::rc::Rc;
 
 use crate::codemap::{Span, Spanned};
-use crate::error::{Error, Handler};
+use crate::error::Handler;
 use crate::syntax::errors::PError;
 use crate::syntax::lexer::{Lexer, Token, TokenK};
 
@@ -37,12 +36,14 @@ pub struct Parser<'a> {
 }
 impl Parser<'_> {
     pub fn new<'a>(input: String, h: &'a mut Handler<PError>, ts: TokenStream) -> Parser<'a> {
-        Parser {
+        let mut p = Parser {
             handler: h,
             current_token: Token::default(),
             tokens: ts,
             src: input,
-        }
+        };
+        p.next_token();
+        p
     }
 
     pub fn parse_terms(&mut self) -> Parsed<Terms> {
@@ -101,7 +102,7 @@ impl Parser<'_> {
         let lo = self.current_token.span.lo_as_usize();
         let hi = self.current_token.span.hi_as_usize();
         if self.current_token.span.len() > 2 {
-            // @SAFETY span is guaranteed to be valid by lexer
+            // SAFETY: span is guaranteed to be valid by lexer?
             Some(unsafe { self.src.get_unchecked(lo + 1..hi - 1) }.into())
         } else {
             None

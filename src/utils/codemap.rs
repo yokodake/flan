@@ -5,6 +5,7 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[derive(Hash, Debug, Clone, PartialEq)]
 pub enum Source {
     NotLoaded,
     Processed,
@@ -12,7 +13,7 @@ pub enum Source {
     /// we do not need the source for binary files
     Binary,
 }
-#[allow(dead_code)]
+#[derive(Hash, Debug, Clone, PartialEq)]
 pub struct SrcFile {
     pub name: String,
     pub absolute_path: PathBuf,
@@ -22,7 +23,8 @@ pub struct SrcFile {
 
 pub type SrcFiles = Vec<Arc<SrcFile>>;
 
-pub struct SrcFileMap(SrcFiles);
+#[derive(Clone, Debug)]
+pub struct SrcFileMap(pub SrcFiles);
 #[allow(unused_variables)]
 impl SrcFileMap {
     pub fn file_exists(&self, path: &PathBuf) -> bool {
