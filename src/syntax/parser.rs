@@ -1,18 +1,18 @@
 //! The Parsing module
 //!
 //! Aside from variable names, all text parsed is represented as a span to avoid
-//! redundant memory usage (especially if they're big files).
+//! redundant memory usage.
 //! The syntax:
 //! ```bnf
 //! Terms := Term*
 //! Term  := Text
 //!        | #$IDENTIFIER#
-//!        | `#VARID{` Terms (`##` Terms)* `}#`
+//!        | `#CHID{` Terms (`##` Terms)* `}#`
 //!
-//! VARID := alphanumeric+
+//! DIMID := alphanumeric+
 //! IDENTIFIER := (alphanumeric | [!%&'*+-./:<=>?@_])*
 //! ```
-//! Variant identifiers (VARID) should be named for now.
+//! Dimension identifiers (DIMID) should be named for now.
 //!
 //! A whole lot of ascii symbols are accepted in identifiers, probably too much, but we can and I figured it might
 //! be interresting to have variables names of paths to contain slashes for example.
@@ -50,7 +50,7 @@ impl Parser<'_> {
         loop {
             match self.current_token.kind() {
                 TokenK::Text | TokenK::Var => terms.append(&mut self.parse_alt()?),
-                TokenK::Openv => terms.push(self.parse_sum()?),
+                TokenK::Opend => terms.push(self.parse_dim()?),
                 TokenK::EOF => return Ok(terms),
                 k => {
                     self.handler
@@ -58,8 +58,8 @@ impl Parser<'_> {
                             format!(
                                 "Unexpected {}.",
                                 match k {
-                                    TokenK::Closev => "closing delimiter",
-                                    TokenK::Sepv => "Variant branch separator",
+                                    TokenK::Closed => "Dimension closing delimiter",
+                                    TokenK::Sepd => "Dimension branch separator",
                                     _ => unreachable!(),
                                 }
                             )
@@ -81,13 +81,12 @@ impl Parser<'_> {
         let name = unsafe { self.src.get_unchecked(lo + 2..hi - 1) };
         Ok(Term::var(name.into(), self.current_token.span))
     }
-
     pub fn parse_txt(&self) -> Parsed<Term> {
         Ok(Term::text(self.current_token.span))
     }
     pub fn parse_alt(&mut self) -> Parsed<Terms> {
         let mut xs = Vec::new();
-        while self.current_token.is_not_sum() {
+        while !self.current_token.is_dimension() {
             let x = match self.current_token.kind() {
                 TokenK::Text => self.parse_txt()?,
                 TokenK::Var => self.parse_var()?,
@@ -98,7 +97,7 @@ impl Parser<'_> {
         }
         Ok(xs)
     }
-    pub fn get_sum_name(&self) -> Option<Name> {
+    pub fn get_dim_name(&self) -> Option<Name> {
         let lo = self.current_token.span.lo_as_usize();
         let hi = self.current_token.span.hi_as_usize();
         if self.current_token.span.len() > 2 {
@@ -108,16 +107,16 @@ impl Parser<'_> {
             None
         }
     }
-    pub fn parse_sum(&mut self) -> Parsed<Term> {
+    pub fn parse_dim(&mut self) -> Parsed<Term> {
         let start = self.current_token.span;
-        let name = self.get_sum_name();
-        self.next_token(); // eat Openv
+        let name = self.get_dim_name();
+        self.next_token(); // eat Opend
         let mut cs = Vec::new();
         loop {
             let c = self.parse_terms()?;
             match self.current_token.kind() {
-                TokenK::Closev => return Ok(Term::sum(name, cs, start + self.current_token.span)),
-                TokenK::Sepv => {
+                TokenK::Closed => return Ok(Term::dim(name, cs, start + self.current_token.span)),
+                TokenK::Sepd => {
                     cs.push(c);
                     self.next_token();
                 }
@@ -160,9 +159,9 @@ impl Term {
             span: s,
         }
     }
-    pub fn sum(n: Option<String>, cs: Vec<Terms>, s: Span) -> Term {
+    pub fn dim(n: Option<String>, cs: Vec<Terms>, s: Span) -> Term {
         Term {
-            node: TermK::Sum {
+            node: TermK::Dimension {
                 name: n,
                 children: cs,
             },
@@ -174,7 +173,7 @@ impl Term {
 pub enum TermK {
     Text,
     Var(Name),
-    Sum {
+    Dimension {
         name: Option<String>,
         children: Vec<Terms>,
     },

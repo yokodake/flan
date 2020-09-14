@@ -1,13 +1,13 @@
 //! The Lexer module
 //!
 //! There are 4 meaningful tokens, anything else is considered text:
-//! - `#VARID{` variants opening delimiter where `VARID` is made of alphanumeric and underscore `_`
-//! - `##` variants element separator
-//! - `}#` veriants closing delimiter
+//! - `#CHID{` dimension opening delimiter where `CHID` is made of alphanumeric and underscore `_`
+//! - `##` dimension alternatives separator
+//! - `}#` dimension closing delimiter
 //! - `#$IDENTIFIER#` variables where `IDENTIFIER` is made of alphanumeric characters or `!%&'*+-./:<=>?@_`
 //!
-//! There are two escapes (`\#` and `\\`), separators (`##`) need not to be escaped *outside* of variants.
-//! @NOTE escape newlines inside of variants?
+//! For now, there are two escapes (`\#` and `\\`), separators (`##`) need not to be escaped *outside* of dimensions.
+//! @NOTE escape newlines inside of Dimensions?
 
 #![allow(dead_code)]
 use core::str::Chars;
@@ -23,7 +23,7 @@ pub struct Lexer<'a> {
     src: Chars<'a>,
     /// current position in the reader, helps for Spanned<>
     pos: Pos,
-    /// number of Open Variant Delimiters
+    /// number of Open dimension delimiters
     nest: usize, // @NOTE usize is probably overkill
     pub handler: &'a mut Handler<PError>,
 }
@@ -64,18 +64,18 @@ impl<'a> Lexer<'a> {
                     self.getc();
                 }
                 '#' => match self.peek1() {
-                    '{' => return self.lex_openv(start),
+                    '{' => return self.lex_openc(start),
                     '$' => return self.lex_var(start),
                     '#' => {
                         if self.nest > 0 {
-                            return self.lex_separator(start);
+                            return self.lex_sepc(start);
                         } else {
-                            // separators have no meaning outside of variants, therefore we can skip them.
+                            // separators have no meaning outside of dimensions, therefore we can skip them.
                             self.getc();
                             // @TODO if peek1 + peek2 is a meaningful token emit warning for not escaping current token?
                         }
                     }
-                    c if c.is_alphanumeric() => match self.lex_openv_maybe(start) {
+                    c if c.is_alphanumeric() => match self.lex_openc_maybe(start) {
                         Some(t) => return t,
                         None => continue, // FIXME
                     },
@@ -83,7 +83,7 @@ impl<'a> Lexer<'a> {
                 },
                 '}' => {
                     if self.peek1() == '#' {
-                        return self.lex_closev(start);
+                        return self.lex_closec(start);
                     } else {
                         continue;
                     }
@@ -115,7 +115,7 @@ impl<'a> Lexer<'a> {
                     .print();
                 self.handler.abort();
             } else if !err {
-                // if we get none whitespace illegal characters, and the variable token is still correctly terminated
+                // if we get none-whitespace illegal characters, and the variable token is still correctly terminated
                 // we can recover, maybe
                 self.handler
                     .error(format!("Unexpected `{}` in variable name.", c).as_ref())
@@ -134,29 +134,29 @@ impl<'a> Lexer<'a> {
             .print();
         self.handler.abort();
     }
-    pub fn lex_openv(&mut self, start: Pos) -> Token {
+    pub fn lex_openc(&mut self, start: Pos) -> Token {
         self.getc(); // eat the '{'
         self.nest += 1;
-        Token::new(Openv, start, self.pos)
+        Token::new(Opend, start, self.pos)
     }
-    pub fn lex_closev(&mut self, start: Pos) -> Token {
+    pub fn lex_closec(&mut self, start: Pos) -> Token {
         self.getc(); // eat the '#'
 
         // prevent underflow. The parser will catch the error.
         self.nest = std::cmp::max(self.nest - 1, 0);
-        Token::new(Openv, start, self.pos)
+        Token::new(Opend, start, self.pos)
     }
-    pub fn lex_separator(&mut self, start: Pos) -> Token {
+    pub fn lex_sepc(&mut self, start: Pos) -> Token {
         self.getc(); // eat the '#'
-        Token::new(Sepv, start, self.pos)
+        Token::new(Sepd, start, self.pos)
     }
-    pub fn lex_openv_maybe(&mut self, start: Pos) -> Option<Token> {
+    pub fn lex_openc_maybe(&mut self, start: Pos) -> Option<Token> {
         while let Some(c) = self.getc() {
             if c.is_alphanumeric() || c == '_' {
                 continue;
             } else if c == '{' {
                 self.getc(); // eat '{'
-                return Some(Token::new(Openv, start, self.pos));
+                return Some(Token::new(Opend, start, self.pos));
             } else {
                 return None;
             }
@@ -181,26 +181,15 @@ impl<'a> Lexer<'a> {
     }
 }
 
-#[allow(dead_code)]
-pub const OPENV: &str = "#{";
-#[allow(dead_code)]
-pub const CLOSEV: &str = "}#";
-#[allow(dead_code)]
-pub const SEPV: &str = "##";
-#[allow(dead_code)]
-pub const PREVAR: &str = "#$";
-#[allow(dead_code)]
-pub const ENDVAR: char = '#';
-// e.g. #$Key# = #{ $HOME ## foo_bar ## }#
-
 pub type Token = Spanned<TokenK>;
 
 impl Token {
     pub fn is_eof(&self) -> bool {
         self.is(EOF)
     }
-    pub fn is_not_sum(&self) -> bool {
-        self.is(Var) || self.is(Text)
+    /// is the token related to dimension or eof
+    pub fn is_dimension(&self) -> bool {
+        !(self.is(Var) || self.is(Text))
     }
     pub fn is(&self, k: TokenK) -> bool {
         self.node == k
@@ -219,12 +208,12 @@ pub enum TokenK {
     Text,
     /// `#$identifier#`
     Var,
-    /// `#{`
-    Openv,
+    /// `#id{`
+    Opend,
     /// `}#`
-    Closev,
+    Closed,
     /// `##`
-    Sepv,
+    Sepd,
     EOF,
 }
 pub use TokenK::*;
