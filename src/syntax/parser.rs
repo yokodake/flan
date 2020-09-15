@@ -98,14 +98,13 @@ impl Parser<'_> {
         }
         Ok(xs)
     }
-    pub fn get_dim_name(&self) -> Option<Name> {
+    pub fn get_dim_name(&self) -> Name {
         let lo = self.current_token.span.lo_as_usize();
         let hi = self.current_token.span.hi_as_usize();
-        if self.current_token.span.len() > 2 {
-            // SAFETY: span is guaranteed to be valid by lexer?
-            Some(unsafe { self.src.get_unchecked(lo + 1..hi - 1) }.into())
-        } else {
-            None
+        // @TODO use get_unchecked instead?
+        match self.src.get(lo + 1..hi - 1).map(String::from) {
+            Some(s) => s,
+            None => String::from(""),
         }
     }
     pub fn parse_dim(&mut self) -> Parsed<Term> {
@@ -160,7 +159,7 @@ impl Term {
             span: s,
         }
     }
-    pub fn dim(n: Option<String>, cs: Vec<Terms>, s: Span) -> Term {
+    pub fn dim(n: String, cs: Vec<Terms>, s: Span) -> Term {
         Term {
             node: TermK::Dimension {
                 name: n,
@@ -174,10 +173,7 @@ impl Term {
 pub enum TermK {
     Text,
     Var(Name),
-    Dimension {
-        name: Option<String>,
-        children: Vec<Terms>,
-    },
+    Dimension { name: String, children: Vec<Terms> },
 }
 
 type TokenStream = VecDeque<Token>;
