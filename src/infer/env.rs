@@ -1,16 +1,18 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::codemap::SrcFileMap;
+use crate::error::Handler;
+use crate::infer::Error;
 
 // @TODO use symbols
 #[derive(Clone, Debug)]
 pub struct Env {
-    variables: HashMap<String, String>,
-    dimensions: HashMap<String, Dim>,
-    // named_choices: HashSet<String>, for once we can declare dimensions in files
-    // file_map: HashMap<PathBuf, PathBuf>,
-    // source_map: SrcFileMap,
+    pub variables: HashMap<String, String>,
+    pub dimensions: HashMap<String, Dim>,
+    // pub choices: HashSet<String>,
+    // pub file_map: HashMap<PathBuf, PathBuf>,
+    // pub source_map: SrcFileMap
 }
 
 impl Env {
@@ -51,10 +53,10 @@ impl Dim {
         }
     }
     /// tries to set the number of options a dimension holds, returns false if it failed
-    /// fails if it was already set before (dimensions < 0)
+    /// fails if it was already set before to a diferent value
     /// fails if `n` is negative too
     pub fn try_set_dim(&mut self, n: i8) -> bool {
-        if self.dimensions < 0 {
+        if self.dimensions != n && self.dimensions > 0 {
             false
         } else if n < 0 {
             false

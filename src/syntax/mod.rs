@@ -1,6 +1,6 @@
-mod errors;
-mod lexer;
-mod parser;
+pub mod errors;
+pub mod lexer;
+pub mod parser;
 // pub use lexer::{Lexer, Token, TokenK};
 
 pub use errors::Error;
