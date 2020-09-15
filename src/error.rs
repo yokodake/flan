@@ -23,9 +23,9 @@ pub enum Level {
     Note,
 }
 
-impl<K: Pattern<K>> Error<K> {
-    pub fn is_kind(&self, k: &K) -> bool {
-        self.kind.as_ref().map_or(false, |l| l.found(k))
+impl<K> Error<K> {
+    pub fn is_kind(&self, k: &impl Pattern<K>) -> bool {
+        self.kind.as_ref().map_or(false, |l| k.found(l))
     }
 }
 impl<K> Error<K> {
@@ -164,21 +164,21 @@ impl<K> std::fmt::Display for Error<K> {
 pub struct ErrorFlags {
     /// 0 = prints nothing, 1 = fatal errors only, 2 = also errors,
     /// 3 = also warnings, 4 = also notes/suggestions
-    report_level: u8,
+    pub report_level: u8,
     /// treat warnings as errors (fail before copying)
-    warn_as_error: bool,
+    pub warn_as_error: bool,
     /// do not print extra notes & suggestions
-    no_extra: bool,
+    pub no_extra: bool,
 }
 
 #[derive(Debug)]
 /// an error handler
 pub struct Handler<K> {
-    flags: ErrorFlags,
-    printed_err: Vec<Error<K>>,
+    pub flags: ErrorFlags,
+    pub printed_err: Vec<Error<K>>,
     /// errors than haven't been printed yet, these should be emitted
     /// if we abort (e.g. with a fatal error)
-    delayed_err: Vec<Error<K>>,
+    pub delayed_err: Vec<Error<K>>,
     // map : srcFileMap, // @TODO
 }
 
@@ -228,8 +228,8 @@ impl<K> Handler<K> {
         }
     }
 }
-impl<K: Pattern<K>> Handler<K> {
-    pub fn find(&self, k: &K) -> Option<&Error<K>> {
+impl<K> Handler<K> {
+    pub fn find(&self, k: &impl Pattern<K>) -> Option<&Error<K>> {
         self.printed_err
             .iter()
             .find(|&e| e.is_kind(k))
@@ -286,6 +286,10 @@ impl<'a, K: Copy> ErrorBuilder<'a, K> {
     pub fn delay(mut self) {
         let e = self.mk_error();
         self.handler.delay(e)
+    }
+    /// consumes the builder, delay error reporting, and return a reference to it
+    pub fn create(mut self) -> Error<K> {
+        self.mk_error()
     }
 
     fn add_extra(&mut self, msg: String) {
