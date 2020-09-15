@@ -14,9 +14,10 @@ use core::str::Chars;
 
 use crate::codemap::{span, Pos, Spanned};
 use crate::error::Handler;
-use crate::syntax::errors::PError;
+use crate::syntax;
 use crate::utils::*;
 
+type PError = syntax::Error;
 /// a `Lexer` is wrapper around a Buffered Reader
 /// a stream of tokens is just like an iterator, so calling `next()` should yield the next token from the source.
 pub struct Lexer<'a> {
@@ -113,7 +114,8 @@ impl<'a> Lexer<'a> {
                     .with_span(span(start, self.pos))
                     .note("Variables have the following syntax: #$variable#")
                     .print();
-                self.handler.abort();
+                // return a wrong Var token, consumer of the TokenStream should check errors
+                return Token::new(Var, start, self.pos);
             } else if !err {
                 // if we get none-whitespace illegal characters, and the variable token is still correctly terminated
                 // we can recover, maybe
@@ -132,7 +134,9 @@ impl<'a> Lexer<'a> {
             .with_span(span(start, self.pos))
             .note("Variables have the following syntax: #$variable#")
             .print();
-        self.handler.abort();
+        // aborting here should be necessary because we're already at the end of the stream.
+        // self.handler.abort();
+        Token::new(Var, start, self.pos)
     }
     pub fn lex_openc(&mut self, start: Pos) -> Token {
         self.getc(); // eat the '{'

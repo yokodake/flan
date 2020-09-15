@@ -10,6 +10,7 @@ pub mod error;
 pub mod syntax;
 
 pub mod env;
+pub mod infer;
 
 pub mod cfg;
 pub use cfg::opt_parse;

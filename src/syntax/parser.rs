@@ -21,21 +21,21 @@ use std::collections::VecDeque;
 
 use crate::codemap::{Span, Spanned};
 use crate::error::Handler;
-use crate::syntax::errors::PError;
 use crate::syntax::lexer::{Lexer, Token, TokenK};
+use crate::syntax::Error;
 
 /// type of a parsed expression
-type Parsed<T> = Result<T, PError>;
+type Parsed<T> = Result<T, Error>;
 
 pub struct Parser<'a> {
     // @FIXME remove mut
-    handler: &'a mut Handler<PError>,
+    handler: &'a mut Handler<Error>,
     current_token: Token,
     tokens: TokenStream,
     src: String,
 }
 impl Parser<'_> {
-    pub fn new<'a>(input: String, h: &'a mut Handler<PError>, ts: TokenStream) -> Parser<'a> {
+    pub fn new<'a>(input: String, h: &'a mut Handler<Error>, ts: TokenStream) -> Parser<'a> {
         let mut p = Parser {
             handler: h,
             current_token: Token::default(),
@@ -67,9 +67,9 @@ impl Parser<'_> {
                             .as_ref(),
                         )
                         .with_span(self.current_token.span)
-                        .with_kind(PError::UnexpectedToken)
+                        .with_kind(Error::UnexpectedToken)
                         .delay();
-                    return Err(PError::UnexpectedToken);
+                    return Err(Error::UnexpectedToken);
                 }
             };
             self.next_token();
@@ -144,9 +144,9 @@ impl Parser<'_> {
     }
 }
 
-type Name = String;
-type Terms = Vec<Term>;
-type Term = Spanned<TermK>;
+pub type Name = String;
+pub type Terms = Vec<Term>;
+pub type Term = Spanned<TermK>;
 impl Term {
     pub fn text(s: Span) -> Term {
         Term {
@@ -182,7 +182,7 @@ pub enum TermK {
 
 type TokenStream = VecDeque<Token>;
 
-pub fn source_to_stream(h: &mut Handler<PError>, src: &str) -> TokenStream {
+pub fn source_to_stream(h: &mut Handler<Error>, src: &str) -> TokenStream {
     let mut vd = VecDeque::new();
     let mut lexer = Lexer::new(src, h);
     loop {
@@ -195,14 +195,14 @@ pub fn source_to_stream(h: &mut Handler<PError>, src: &str) -> TokenStream {
     vd
 }
 
-pub fn string_to_parser<'a>(h: &'a mut Handler<PError>, str: String) -> Parser<'a> {
+pub fn string_to_parser<'a>(h: &'a mut Handler<Error>, str: String) -> Parser<'a> {
     let ts = source_to_stream(h, str.as_ref());
     Parser::new(str, h, ts)
 }
 
 use crate::codemap::SrcFile;
 use std::io;
-pub fn file_to_parser<'a>(h: &'a mut Handler<PError>, src: &mut SrcFile) -> io::Result<Parser<'a>> {
+pub fn file_to_parser<'a>(h: &'a mut Handler<Error>, src: &mut SrcFile) -> io::Result<Parser<'a>> {
     use crate::codemap::Source;
     use std::io::{Error, ErrorKind};
     // @SPEED stop cloning sources

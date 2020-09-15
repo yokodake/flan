@@ -23,16 +23,16 @@ pub enum Level {
     Note,
 }
 
-impl<K: PartialEq> Error<K> {
-    pub fn is(&self, k: K) -> bool {
-        self.kind.contains(&k)
+impl<K: Pattern<K>> Error<K> {
+    pub fn is_kind(&self, k: &K) -> bool {
+        self.kind.as_ref().map_or(false, |l| l.found(k))
     }
 }
 impl<K> Error<K> {
     pub fn has_kind(&self) -> bool {
         self.kind.is_some()
     }
-    pub fn kind(&self) -> &K {
+    pub unsafe fn kind(&self) -> &K {
         self.kind.as_ref().unwrap()
     }
     pub fn is_fatal(&self) -> bool {
@@ -226,6 +226,27 @@ impl<K> Handler<K> {
             span: None,
             kind: None,
         }
+    }
+}
+impl<K: Pattern<K>> Handler<K> {
+    pub fn find(&self, k: &K) -> Option<&Error<K>> {
+        self.printed_err
+            .iter()
+            .find(|&e| e.is_kind(k))
+            // `.or_else` instead of `.or` for laziness
+            .or_else(|| self.delayed_err.iter().find(|&e| e.is_kind(k)))
+    }
+}
+/// similar to [`std::str::Pattern`]
+pub trait Pattern<E> {
+    fn found(&self, e: &E) -> bool;
+}
+impl<E, F> Pattern<E> for F
+where
+    F: Fn(&E) -> bool,
+{
+    fn found(&self, e: &E) -> bool {
+        self(e)
     }
 }
 
