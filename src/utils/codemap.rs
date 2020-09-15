@@ -4,6 +4,7 @@ use std::io;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 #[derive(Hash, Debug, Clone, PartialEq)]
 pub enum Source {
@@ -14,25 +15,47 @@ pub enum Source {
     Binary,
 }
 #[derive(Hash, Debug, Clone, PartialEq)]
-pub struct SrcFile {
+pub struct File {
     pub name: String,
     pub absolute_path: PathBuf,
     pub relative_path: PathBuf,
     pub src: Source,
 }
 
-pub type SrcFiles = Vec<Arc<SrcFile>>;
+pub type SrcFile = Arc<RwLock<File>>;
+pub type SrcFiles = Vec<SrcFile>;
 
 #[derive(Clone, Debug)]
 pub struct SrcFileMap(pub SrcFiles);
 #[allow(unused_variables)]
 impl SrcFileMap {
-    pub fn file_exists(&self, path: &PathBuf) -> bool {
-        todo!()
+    pub fn new() -> Self {
+        SrcFileMap(Vec::new())
     }
-
-    pub fn load_file(&self, path: &PathBuf) -> io::Result<Arc<SrcFile>> {
-        todo!()
+    pub fn load_file(&mut self, path: &PathBuf) -> io::Result<SrcFile> {
+        let file = Arc::new(RwLock::new(Self::path_to_file(path)?));
+        self.0.push(file.clone());
+        Ok(file)
+    }
+    pub fn path_to_file(path: &PathBuf) -> io::Result<File> {
+        use std::env::current_dir;
+        use std::io::{Error, ErrorKind};
+        use std::ops::Try;
+        let absolute_path = path.canonicalize()?;
+        let relative_path = PathBuf::from("relative/paths/not/implemented/yet");
+        if !absolute_path.is_file() {
+            Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("`{}` not a file.", path.to_string_lossy()).as_ref(),
+            ))?;
+        }
+        let name = absolute_path.file_name().unwrap().to_string_lossy().into();
+        Ok(File {
+            name,
+            absolute_path,
+            relative_path,
+            src: Source::NotLoaded,
+        })
     }
 }
 

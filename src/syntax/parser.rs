@@ -193,16 +193,24 @@ pub fn source_to_stream(h: &mut Handler<Error>, src: &str) -> TokenStream {
 
 pub fn string_to_parser<'a>(h: &'a mut Handler<Error>, str: String) -> Parser<'a> {
     let ts = source_to_stream(h, str.as_ref());
+    h.find(&Error::is_fatal);
     Parser::new(str, h, ts)
 }
 
 use crate::codemap::SrcFile;
 use std::io;
-pub fn file_to_parser<'a>(h: &'a mut Handler<Error>, src: &mut SrcFile) -> io::Result<Parser<'a>> {
+pub fn file_to_parser<'a>(h: &'a mut Handler<Error>, source: SrcFile) -> io::Result<Parser<'a>> {
     use crate::codemap::Source;
     use std::io::{Error, ErrorKind};
-    // @SPEED stop cloning sources
-    match &src.src {
+    // @SPEED lots of stupid stuff in here
+    let mut apath;
+    let mut src;
+    {
+        let file = source.read().unwrap();
+        src = file.src.clone();
+        apath = file.absolute_path.clone();
+    }
+    match src {
         Source::Binary => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -211,13 +219,14 @@ pub fn file_to_parser<'a>(h: &'a mut Handler<Error>, src: &mut SrcFile) -> io::R
         }
         Source::Src(s) => return Ok(string_to_parser(h, s.clone())),
         Source::NotLoaded => {
-            let s = std::fs::read_to_string(&src.absolute_path)?;
-            src.src = Source::Src(s.clone());
+            let s = std::fs::read_to_string(&apath)?;
+            let mut file = source.write().unwrap_or_else(|_| todo!("locks"));
+            file.src = Source::Src(s.clone());
             return Ok(string_to_parser(h, s));
         }
         // process again?
         Source::Processed => {
-            let s = std::fs::read_to_string(&src.absolute_path)?;
+            let s = std::fs::read_to_string(&apath)?;
             return Ok(string_to_parser(h, s));
         }
     }

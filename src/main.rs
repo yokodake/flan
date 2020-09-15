@@ -17,6 +17,9 @@ fn main() {
 }
 
 fn dummy(opt: &Opt) {
+    use flan::codemap::SrcFileMap;
+    use flan::error::{ErrorFlags, Handler};
+    use flan::syntax::parser::file_to_parser;
     let (n, ni);
     match opt.parse_decisions() {
         Ok((x, y)) => {
@@ -37,6 +40,20 @@ fn dummy(opt: &Opt) {
         ("bar/baz".into(), "bar/baz_val".into()),
     ];
     let env = make_env(declared_vars, declared_dims, (n, ni));
+    let mut h = Handler::new(ErrorFlags {
+        no_extra: false,
+        report_level: 5,
+        warn_as_error: false,
+    });
+    let mut map = SrcFileMap::new();
+    match map.load_file(&opt.file_in) {
+        Err(e) => {
+            eprintln!("{}", e);
+        }
+        Ok(f) => {
+            file_to_parser(&mut h, f);
+        }
+    };
 }
 pub fn make_env(
     variables: Vec<(String, String)>,

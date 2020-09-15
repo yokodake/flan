@@ -183,6 +183,13 @@ pub struct Handler<K> {
 }
 
 impl<K> Handler<K> {
+    pub fn new(flags: ErrorFlags) -> Self {
+        Handler {
+            flags,
+            printed_err: Vec::new(),
+            delayed_err: Vec::new(),
+        }
+    }
     pub fn abort(&mut self) -> ! {
         self.print_all();
         if cfg!(windows) {
