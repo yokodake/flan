@@ -7,10 +7,12 @@
 pub mod env;
 pub mod errors;
 
+// re-exports
+pub use env::{Dim, Env};
 pub use errors::Error;
 
+// imports
 use crate::codemap::Spanned;
-use crate::env::{Dim, Env};
 use crate::error::Handler;
 use crate::syntax::{TermK, Terms};
 

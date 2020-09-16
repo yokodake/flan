@@ -2,12 +2,10 @@
 #![feature(option_result_contains)]
 use std::collections::{HashMap, HashSet};
 use std::io;
-use std::iter::FromIterator;
 use std::path::PathBuf;
 
 use structopt::StructOpt;
 
-use flan::env::{Dim, Env};
 use flan::opt_parse::{Index, OptCh};
 
 fn main() {
@@ -18,8 +16,10 @@ fn main() {
 
 fn dummy(opt: &Opt) {
     use flan::codemap::SrcFileMap;
+    use flan::driver::{file_to_parser, make_env};
     use flan::error::{ErrorFlags, Handler};
-    use flan::syntax::parser::file_to_parser;
+    use flan::infer;
+
     let (n, ni);
     match opt.parse_decisions() {
         Ok((x, y)) => {
@@ -39,107 +39,52 @@ fn dummy(opt: &Opt) {
         ("foo".into(), "foo_val".into()),
         ("bar/baz".into(), "bar/baz_val".into()),
     ];
-    let env = make_env(declared_vars, declared_dims, (n, ni));
-    let mut h = Handler::new(ErrorFlags {
+    let flags = ErrorFlags {
         no_extra: false,
         report_level: 5,
         warn_as_error: false,
-    });
+    };
+    let mut hp = Handler::new(flags);
+
+    let mut env: infer::Env = match make_env(declared_vars, declared_dims, (n, ni)) {
+        Some(e) => e,
+        None => {
+            eprintln!("Aborting due to previous errors.");
+            hp.abort()
+        }
+    };
     let mut map = SrcFileMap::new();
     match map.load_file(&opt.file_in) {
         Err(e) => {
+            hp.print_all();
             eprintln!("{}", e);
+            hp.abort();
         }
-        Ok(f) => {
-            file_to_parser(&mut h, f);
-        }
+        Ok(f) => match file_to_parser(&mut hp, f) {
+            Err(e) => {
+                hp.print_all();
+                eprintln!("{}", e);
+                hp.abort();
+            }
+            Ok(mut p) => {
+                let mut hi = Handler::new(flags);
+                match p
+                    .parse_terms()
+                    .map(|tree| infer::check(&tree, &mut env, &mut hi))
+                {
+                    Err(e) => {
+                        eprint!("{:#?}", e);
+                        hp.abort();
+                    }
+                    Ok(None) => {
+                        eprintln!("Type Checking failure.");
+                        hi.abort();
+                    }
+                    Ok(Some(_)) => println!("succes."),
+                };
+            }
+        },
     };
-}
-pub fn make_env(
-    variables: Vec<(String, String)>,
-    decl_dim: Vec<(String, Vec<String>)>,
-    (chs, idxs): (HashSet<String>, HashMap<String, Index>),
-) -> Option<Env> {
-    use std::fmt::Write;
-    let mut dimensions = HashMap::new();
-    let mut errors = Vec::new();
-    for (dn, ons) in decl_dim {
-        // we keep this binding (instead of only `ni`) for error repoorting
-        let idx = idxs.get(&dn);
-        let mut ni = maybe_idx(idx, &ons);
-        // list of valid decisions for the current dimension
-        let mut found = Vec::new();
-        // if there's a conflict between idx & and a `chs`
-        let mut conflict = false;
-        // if ni was not set by maybe_idx
-        let mut set = false;
-
-        for (p, on) in ons.iter().enumerate() {
-            if !chs.contains(on) {
-                continue;
-            }
-            if !set && ni.map_or(false, |(n, _)| n != on) {
-                conflict = true;
-            }
-            if ni.map_or(false, |(n, _)| n == on) {
-                // @TODO use handler for verbosity level.
-                println!(
-                    "note: choices `{}` and `{}={}` are redundant.",
-                    on,
-                    &dn,
-                    idx.unwrap()
-                )
-            }
-            if ni.is_none() {
-                ni = Some((on, p as u8));
-                set = true;
-            }
-            found.push(on);
-        }
-
-        if conflict || found.len() > 1 {
-            let mut msg = String::from("The following choices are conflicting: ");
-            let mut it = found.iter();
-            if conflict {
-                write!(&mut msg, "{}={}", &dn, idx.unwrap());
-            } else {
-                write!(&mut msg, "{}", it.next().unwrap());
-            }
-            for &i in it {
-                write!(&mut msg, ", {}", i);
-            }
-            errors.push(msg);
-        } else {
-            dimensions.insert(
-                dn,
-                Dim {
-                    dimensions: ons.len() as i8,
-                    choice: ni.unwrap().1,
-                },
-            );
-        }
-    }
-
-    if errors.len() == 0 {
-        return Some(Env::new(HashMap::from_iter(variables), dimensions));
-    }
-    for e in errors {
-        println!("{}", e);
-    }
-    None
-}
-
-pub fn maybe_idx<'a>(i: Option<&'a Index>, options: &'a Vec<String>) -> Option<(&'a String, u8)> {
-    match i? {
-        Index::Name(n) => {
-            let i = options.iter().position(|s| n == s)?;
-            Some((n, i as u8))
-        }
-        Index::Num(i) => {
-            let n = options.get(*i as usize)?;
-            Some((n, *i))
-        }
-    }
 }
 
 #[derive(StructOpt, Clone, PartialEq, Eq, Debug)]

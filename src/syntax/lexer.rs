@@ -26,6 +26,8 @@ pub struct Lexer<'a> {
     pos: Pos,
     /// number of Open dimension delimiters
     nest: usize, // @NOTE usize is probably overkill
+    prev: char,
+    cur: Option<char>,
     pub handler: &'a mut Handler<PError>,
 }
 
@@ -42,6 +44,8 @@ impl<'a> Lexer<'a> {
             pos: Pos::from(0 as usize),
             nest: 0,
             handler: h,
+            prev: '\0',
+            cur: None,
         }
     }
     /// get the next character without consuming it
@@ -54,59 +58,81 @@ impl<'a> Lexer<'a> {
     }
     /// consumes and
     fn getc(&mut self) -> Option<char> {
-        self.src.next().sequence(|_| self.pos += 1)
+        self.cur = self.src.next().sequence(|_| {
+            self.prev = self.cur.unwrap_or('\0');
+            self.pos += 1
+        });
+        self.cur.clone()
     }
     /// returns the next token
     pub fn next_token(&mut self) -> Token {
         let start = self.pos;
         while let Some(c) = self.getc() {
+            if self.prev == '#' && Self::is_varstart(c) {
+                match self.lex_opend_maybe(start - 1) {
+                    Some(t) => return t,
+                    None => {}
+                }
+            }
             match c {
                 '\\' => {
                     self.getc();
                 }
-                '#' => match self.peek1() {
-                    '{' => return self.lex_openc(start),
-                    '$' => return self.lex_var(start),
-                    '#' => {
-                        if self.nest > 0 {
-                            return self.lex_sepc(start);
-                        } else {
-                            // separators have no meaning outside of dimensions, therefore we can skip them.
-                            self.getc();
-                            // @TODO if peek1 + peek2 is a meaningful token emit warning for not escaping current token?
-                        }
-                    }
-                    c if c.is_alphanumeric() => match self.lex_openc_maybe(start) {
-                        Some(t) => return t,
-                        None => continue, // FIXME
-                    },
+                '{' => match self.prev {
+                    '#' => continue, // @FIXME either fail or warn.
                     _ => continue,
                 },
-                '}' => {
-                    if self.peek1() == '#' {
-                        return self.lex_closec(start);
-                    } else {
-                        continue;
+                '$' => match self.prev {
+                    '#' => return self.lex_var(start - 1),
+                    _ => continue,
+                },
+                '#' => match self.prev {
+                    '#' => {
+                        if self.nest > 0 {
+                            return self.lex_sepd(start - 1);
+                        } else {
+                            continue;
+                        }
                     }
-                }
+                    '}' => return self.lex_closed(start),
+                    _ => match self.peek1() {
+                        '{' | '$' | '#' => return self.lex_txt(start),
+
+                        c if Self::is_varstart(c) => return self.lex_txt(start), // might be an dimension opening next
+                        _ => continue,
+                    },
+                },
+                '}' => match self.peek1() {
+                    '#' => return self.lex_txt(start),
+                    _ => continue,
+                },
                 _ => continue,
             };
         }
-        Spanned::new(EOF, self.pos, self.pos + 1)
+        if start != self.pos {
+            self.lex_txt(start)
+        } else {
+            Spanned::new(EOF, start, self.pos)
+        }
     }
 
+    pub fn is_varstart(c: char) -> bool {
+        c.is_alphabetic() || c == '_'
+    }
     pub fn is_varsymbol(c: char) -> bool {
         c.is_alphanumeric() || VAR_SYMS.contains(&c)
     }
-
+    pub fn lex_txt(&self, start: Pos) -> Token {
+        Token::new(Text, start, self.pos)
+    }
     pub fn lex_var(&mut self, start: Pos) -> Token {
         let mut err = false;
-        self.getc(); // eat the '$'
         while let Some(c) = self.getc() {
             if Self::is_varsymbol(c) {
                 continue;
             } else if c == '#' {
-                return Token::new(Var, start, self.pos);
+                self.getc(); // eat it
+                return Token::new(Var, start, self.pos - 1);
             } else if c.is_whitespace() {
                 self.handler
                     .error("Non-terminated variable. Expected `#`, Found whitespace instead.")
@@ -138,34 +164,34 @@ impl<'a> Lexer<'a> {
         // self.handler.abort();
         Token::new(Var, start, self.pos)
     }
-    pub fn lex_openc(&mut self, start: Pos) -> Token {
-        self.getc(); // eat the '{'
+    /// useless?
+    pub fn lex_opend(&mut self, start: Pos) -> Token {
         self.nest += 1;
         Token::new(Opend, start, self.pos)
     }
-    pub fn lex_closec(&mut self, start: Pos) -> Token {
-        self.getc(); // eat the '#'
-
-        // prevent underflow. The parser will catch the error.
-        self.nest = std::cmp::max(self.nest - 1, 0);
-        Token::new(Opend, start, self.pos)
-    }
-    pub fn lex_sepc(&mut self, start: Pos) -> Token {
-        self.getc(); // eat the '#'
-        Token::new(Sepd, start, self.pos)
-    }
-    pub fn lex_openc_maybe(&mut self, start: Pos) -> Option<Token> {
+    pub fn lex_opend_maybe(&mut self, start: Pos) -> Option<Token> {
         while let Some(c) = self.getc() {
             if c.is_alphanumeric() || c == '_' {
                 continue;
             } else if c == '{' {
-                self.getc(); // eat '{'
+                self.getc();
+                self.nest += 1;
                 return Some(Token::new(Opend, start, self.pos));
             } else {
                 return None;
             }
         }
         None
+    }
+    pub fn lex_closed(&mut self, start: Pos) -> Token {
+        // Just prevent underflow. The parser will catch the error.
+        self.getc();
+        self.nest = std::cmp::max(self.nest, 1) - 1;
+        Token::new(Closed, start, self.pos)
+    }
+    pub fn lex_sepd(&mut self, start: Pos) -> Token {
+        self.getc(); // eat the '#'
+        Token::new(Sepd, start, self.pos)
     }
 
     fn identifier_note() -> String {

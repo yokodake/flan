@@ -40,7 +40,6 @@ impl SrcFileMap {
     pub fn path_to_file(path: &PathBuf) -> io::Result<File> {
         use std::env::current_dir;
         use std::io::{Error, ErrorKind};
-        use std::ops::Try;
         let absolute_path = path.canonicalize()?;
         let relative_path = PathBuf::from("relative/paths/not/implemented/yet");
         if !absolute_path.is_file() {
@@ -99,9 +98,15 @@ impl Add<PosInner> for Pos {
     }
 }
 impl Sub<Pos> for Pos {
-    type Output = PosInner;
-    fn sub(self, other: Pos) -> PosInner {
-        self.0 - other.0
+    type Output = Pos;
+    fn sub(self, other: Pos) -> Pos {
+        Pos(self.0 - other.0)
+    }
+}
+impl Sub<PosInner> for Pos {
+    type Output = Pos;
+    fn sub(self, other: PosInner) -> Pos {
+        Pos(self.0 - other)
     }
 }
 impl AddAssign for Pos {
@@ -167,7 +172,7 @@ impl Span {
     }
     /// computes length of the span
     pub fn len(&self) -> u64 {
-        self.hi - self.lo
+        self.hi.0 - self.lo.0
     }
     /// merges two spans, same as `+` operator
     pub fn merge(self, other: Span) -> Span {

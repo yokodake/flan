@@ -21,7 +21,7 @@ use std::collections::VecDeque;
 
 use crate::codemap::{Span, Spanned};
 use crate::error::Handler;
-use crate::syntax::lexer::{Lexer, Token, TokenK};
+use crate::syntax::lexer::{Token, TokenK};
 use crate::syntax::Error;
 
 /// type of a parsed expression
@@ -33,6 +33,8 @@ pub struct Parser<'a> {
     current_token: Token,
     tokens: TokenStream,
     src: String,
+    // unmatched open delimiters
+    nest: u8,
 }
 impl Parser<'_> {
     pub fn new<'a>(input: String, h: &'a mut Handler<Error>, ts: TokenStream) -> Parser<'a> {
@@ -41,6 +43,7 @@ impl Parser<'_> {
             current_token: Token::default(),
             tokens: ts,
             src: input,
+            nest: 0,
         };
         p.next_token();
         p
@@ -50,27 +53,37 @@ impl Parser<'_> {
         let mut terms = Vec::new();
         loop {
             match self.current_token.kind() {
-                TokenK::Text | TokenK::Var => terms.append(&mut self.parse_alt()?),
-                TokenK::Opend => terms.push(self.parse_dim()?),
-                TokenK::EOF => return Ok(terms),
-                k => {
-                    self.handler
-                        .error(
-                            format!(
-                                "Unexpected {}.",
-                                match k {
-                                    TokenK::Closed => "Dimension closing delimiter",
-                                    TokenK::Sepd => "Dimension branch separator",
-                                    _ => unreachable!(),
-                                }
-                            )
-                            .as_ref(),
-                        )
-                        .with_span(self.current_token.span)
-                        .with_kind(Error::UnexpectedToken)
-                        .delay();
-                    return Err(Error::UnexpectedToken);
+                TokenK::Text => terms.push(self.parse_txt()?),
+                TokenK::Var => terms.push(self.parse_var()?),
+                TokenK::Opend => {
+                    self.nest += 1;
+                    let t = self.parse_dim()?;
+                    terms.push(t);
                 }
+                k @ TokenK::Closed | k @ TokenK::Sepd => {
+                    if self.nest == 0 {
+                        self.handler
+                            .error(
+                                format!(
+                                    "Unexpected {}.",
+                                    match k {
+                                        TokenK::Closed => "Dimension closing delimiter",
+                                        TokenK::Sepd => "Dimension branch separator",
+                                        _ => unreachable!(),
+                                    }
+                                )
+                                .as_ref(),
+                            )
+                            .with_span(self.current_token.span)
+                            .with_kind(Error::UnexpectedToken)
+                            .delay();
+                        return Err(Error::UnexpectedToken);
+                    } else if k == TokenK::Closed {
+                        self.nest -= 1;
+                    }
+                    return Ok(terms);
+                }
+                TokenK::EOF => return Ok(terms),
             };
             self.next_token();
         }
@@ -102,7 +115,7 @@ impl Parser<'_> {
         let lo = self.current_token.span.lo_as_usize();
         let hi = self.current_token.span.hi_as_usize();
         // @TODO use get_unchecked instead?
-        match self.src.get(lo + 1..hi - 1).map(String::from) {
+        match self.src.get(lo + 1..hi - 2).map(String::from) {
             Some(s) => s,
             None => String::from(""),
         }
@@ -115,12 +128,24 @@ impl Parser<'_> {
         loop {
             let c = self.parse_terms()?;
             match self.current_token.kind() {
-                TokenK::Closed => return Ok(Term::dim(name, cs, start + self.current_token.span)),
+                TokenK::Closed => {
+                    cs.push(c);
+                    self.next_token(); // eat Closed
+                    return Ok(Term::dim(name, cs, start + self.current_token.span));
+                }
                 TokenK::Sepd => {
                     cs.push(c);
-                    self.next_token();
+                    self.next_token(); // eat Sepd
+                    continue;
                 }
-                TokenK::EOF => todo!("error"),
+                TokenK::EOF => {
+                    self.handler
+                        .error("Unclosed dimension delimiter. Expected `}#`.")
+                        .with_span(start)
+                        .with_kind(Error::UnclosedDelimiter)
+                        .delay();
+                    return Err(Error::UnclosedDelimiter);
+                }
                 _ => unreachable!(),
             }
         }
@@ -176,58 +201,4 @@ pub enum TermK {
     Dimension { name: String, children: Vec<Terms> },
 }
 
-type TokenStream = VecDeque<Token>;
-
-pub fn source_to_stream(h: &mut Handler<Error>, src: &str) -> TokenStream {
-    let mut vd = VecDeque::new();
-    let mut lexer = Lexer::new(src, h);
-    loop {
-        let t = lexer.next_token();
-        vd.push_back(t);
-        if t.is_eof() {
-            break;
-        }
-    }
-    vd
-}
-
-pub fn string_to_parser<'a>(h: &'a mut Handler<Error>, str: String) -> Parser<'a> {
-    let ts = source_to_stream(h, str.as_ref());
-    h.find(&Error::is_fatal);
-    Parser::new(str, h, ts)
-}
-
-use crate::codemap::SrcFile;
-use std::io;
-pub fn file_to_parser<'a>(h: &'a mut Handler<Error>, source: SrcFile) -> io::Result<Parser<'a>> {
-    use crate::codemap::Source;
-    use std::io::{Error, ErrorKind};
-    // @SPEED lots of stupid stuff in here
-    let mut apath;
-    let mut src;
-    {
-        let file = source.read().unwrap();
-        src = file.src.clone();
-        apath = file.absolute_path.clone();
-    }
-    match src {
-        Source::Binary => {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "binary data cannot be parsed",
-            ))
-        }
-        Source::Src(s) => return Ok(string_to_parser(h, s.clone())),
-        Source::NotLoaded => {
-            let s = std::fs::read_to_string(&apath)?;
-            let mut file = source.write().unwrap_or_else(|_| todo!("locks"));
-            file.src = Source::Src(s.clone());
-            return Ok(string_to_parser(h, s));
-        }
-        // process again?
-        Source::Processed => {
-            let s = std::fs::read_to_string(&apath)?;
-            return Ok(string_to_parser(h, s));
-        }
-    }
-}
+pub type TokenStream = VecDeque<Token>;

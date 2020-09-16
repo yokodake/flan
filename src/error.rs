@@ -192,6 +192,13 @@ impl<K> Handler<K> {
     }
     pub fn abort(&mut self) -> ! {
         self.print_all();
+        if self.printed_err.len() > 1 {
+            eprintln!("Aborting due to previous error.");
+        } else if self.printed_err.len() == 1 {
+            eprintln!("Aborting due to previous error.");
+        } else {
+            eprintln!("Aborting.");
+        }
         if cfg!(windows) {
             std::process::exit(0x100)
         } else {
@@ -234,8 +241,6 @@ impl<K> Handler<K> {
             kind: None,
         }
     }
-}
-impl<K> Handler<K> {
     pub fn find(&self, k: &impl Pattern<K>) -> Option<&Error<K>> {
         self.printed_err
             .iter()
@@ -244,6 +249,7 @@ impl<K> Handler<K> {
             .or_else(|| self.delayed_err.iter().find(|&e| e.is_kind(k)))
     }
 }
+
 /// similar to [`std::str::Pattern`]
 pub trait Pattern<E> {
     fn found(&self, e: &E) -> bool;
