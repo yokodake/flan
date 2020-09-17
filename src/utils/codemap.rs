@@ -1,4 +1,4 @@
-//! see https://docs.rs/codemap/ but with u64 instead
+//! custom version of [https://docs.rs/codemap/](https://docs.rs/codemap/).
 
 use std::io;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
@@ -7,7 +7,8 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 #[derive(Hash, Debug, Clone, PartialEq)]
-pub enum Source {
+/// Information about the Source
+pub enum SourceInfo {
     NotLoaded,
     Processed,
     Src(String),
@@ -19,24 +20,27 @@ pub struct File {
     pub name: String,
     pub absolute_path: PathBuf,
     pub relative_path: PathBuf,
-    pub src: Source,
+    pub src: SourceInfo,
 }
 
+/// type synonym for easier refactoring
 pub type SrcFile = Arc<RwLock<File>>;
-pub type SrcFiles = Vec<SrcFile>;
 
 #[derive(Clone, Debug)]
-pub struct SrcFileMap(pub SrcFiles);
+/// A map of source files. @NOTE Maybe shouldn't be a new type.
+pub struct SrcFileMap(pub Vec<SrcFile>);
 #[allow(unused_variables)]
 impl SrcFileMap {
     pub fn new() -> Self {
         SrcFileMap(Vec::new())
     }
+    /// load a file and add it to the map
     pub fn load_file(&mut self, path: &PathBuf) -> io::Result<SrcFile> {
         let file = Arc::new(RwLock::new(Self::path_to_file(path)?));
         self.0.push(file.clone());
         Ok(file)
     }
+    /// helper that builds a [`File`] from a path
     pub fn path_to_file(path: &PathBuf) -> io::Result<File> {
         use std::env::current_dir;
         use std::io::{Error, ErrorKind};
@@ -53,12 +57,13 @@ impl SrcFileMap {
             name,
             absolute_path,
             relative_path,
-            src: Source::NotLoaded,
+            src: SourceInfo::NotLoaded,
         })
     }
 }
 
 pub type PosInner = u64;
+/// A position inside a codemap.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Debug)]
 #[repr(transparent)]
 pub struct Pos(PosInner);
@@ -130,15 +135,15 @@ impl SubAssign<PosInner> for Pos {
     }
 }
 
-/// an offset inside the sourcemap
+/// an span inside the sourcemap
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct Span {
     /// first byte
-    lo: Pos,
+    pub lo: Pos,
     /// *after* last byte
-    hi: Pos,
+    pub hi: Pos,
 }
-/// span ctor from inner values
+/// span ctor from [`Pos`] values
 pub fn span(lo: Pos, hi: Pos) -> Span {
     Span { lo: lo, hi: hi }
 }
@@ -155,6 +160,7 @@ impl Add<Span> for Span {
     }
 }
 impl Span {
+    /// Span ctor from inner values
     pub fn new(lo: PosInner, hi: PosInner) -> Span {
         Span {
             lo: Pos(lo),
@@ -198,6 +204,7 @@ impl std::fmt::Display for Span {
     }
 }
 
+/// helper for values that come with a span
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct Spanned<T> {
     pub node: T,

@@ -73,8 +73,8 @@ pub fn make_env(
             dimensions.insert(
                 dn,
                 Dim {
-                    dimensions: ons.len() as i8,
-                    choice: ni.unwrap().1,
+                    choices: ons.len() as i8,
+                    decision: ni.unwrap().1,
                 },
             );
         }
@@ -89,19 +89,21 @@ pub fn make_env(
     None
 }
 
-pub fn maybe_idx<'a>(i: Option<&'a Index>, options: &'a Vec<String>) -> Option<(&'a String, u8)> {
+/// tries get the name and index pair from an [`Index`] and a list of choices
+pub fn maybe_idx<'a>(i: Option<&'a Index>, choices: &'a Vec<String>) -> Option<(&'a String, u8)> {
     match i? {
         Index::Name(n) => {
-            let i = options.iter().position(|s| n == s)?;
+            let i = choices.iter().position(|s| n == s)?;
             Some((n, i as u8))
         }
         Index::Num(i) => {
-            let n = options.get(*i as usize)?;
+            let n = choices.get(*i as usize)?;
             Some((n, *i))
         }
     }
 }
 
+/// transform a source into a [`TokenStream`]
 pub fn source_to_stream(h: &mut Handler<PError>, src: &str) -> TokenStream {
     let mut vd = VecDeque::new();
     let mut lexer = Lexer::new(src, h);
@@ -129,7 +131,7 @@ pub fn string_to_parser<'a>(h: &'a mut Handler<PError>, str: String) -> io::Resu
 }
 
 pub fn file_to_parser<'a>(h: &'a mut Handler<PError>, source: SrcFile) -> io::Result<Parser<'a>> {
-    use crate::codemap::Source;
+    use crate::codemap::SourceInfo;
     use std::io::{Error, ErrorKind};
     // @SPEED lots of stupid stuff in here
     let apath;
@@ -140,21 +142,22 @@ pub fn file_to_parser<'a>(h: &'a mut Handler<PError>, source: SrcFile) -> io::Re
         apath = file.absolute_path.clone();
     }
     match src {
-        Source::Binary => {
+        SourceInfo::Binary => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 "binary data cannot be parsed",
             ))
         }
-        Source::Src(s) => return Ok(string_to_parser(h, s.clone())?),
-        Source::NotLoaded => {
+        SourceInfo::Src(s) => return Ok(string_to_parser(h, s.clone())?),
+        SourceInfo::NotLoaded => {
+            // @TODO check if it failed in case data is binary => set src as Binary
             let s = std::fs::read_to_string(&apath)?;
             let mut file = source.write().unwrap_or_else(|_| todo!("locks"));
-            file.src = Source::Src(s.clone());
+            file.src = SourceInfo::Src(s.clone());
             return Ok(string_to_parser(h, s)?);
         }
         // process again?
-        Source::Processed => {
+        SourceInfo::Processed => {
             let s = std::fs::read_to_string(&apath)?;
             return Ok(string_to_parser(h, s)?);
         }

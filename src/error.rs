@@ -220,10 +220,11 @@ impl<K> Handler<K> {
         Self::print_explicit(&self.flags, &mut self.printed_err, err)
     }
     /// exists in order to avoid code duplication between `print` and `print_all` due to
-    /// borrow issues, despite needing technically needing two different fields
-    /// ```
+    /// mutable borrow conflicts of `self`, despite borrowing two different fields
+    /// ```rust
     /// for e in self.delay_err.iter() { // immutable borrow
     ///   self.print(e) // mutable borrow
+    /// }
     /// ```
     fn print_explicit(flags: &ErrorFlags, printed: &mut Vec<Error<K>>, err: Error<K>) {
         // @FIXME better error formatting with source files
@@ -250,7 +251,7 @@ impl<K> Handler<K> {
     }
 }
 
-/// similar to [`std::str::Pattern`]
+/// similar to [`std::str::pattern::Pattern`]
 pub trait Pattern<E> {
     fn found(&self, e: &E) -> bool;
 }
@@ -264,19 +265,21 @@ where
 }
 
 pub struct ErrorBuilder<'a, K> {
-    handler: &'a mut Handler<K>,
-    level: Level,
-    /// messages[0] = `Error::message`, the rest are extras
-    messages: Vec<String>,
-    span: Option<Span>,
-    kind: Option<K>,
+    pub handler: &'a mut Handler<K>,
+    pub level: Level,
+    /// `messages[0] = Error::message`, the rest are extras
+    pub messages: Vec<String>,
+    pub span: Option<Span>,
+    pub kind: Option<K>,
 }
 
 impl<'a, K: Copy> ErrorBuilder<'a, K> {
+    /// adds an extra message as note
     pub fn note(mut self, msg: &str) -> Self {
         self.add_extra(format!("note: {}", msg));
         self
     }
+    /// adds an extra message as suggestion
     pub fn suggest(mut self, msg: &str) -> Self {
         self.add_extra(format!("suggestion: {}", msg));
         self

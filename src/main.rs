@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
-use flan::opt_parse::{Index, OptCh};
+use flan::opt_parse::{Index, OptDec};
 
 fn main() {
     let opt = Opt::from_args();
@@ -125,11 +125,11 @@ impl Opt {
         let mut nc = HashSet::new();
         let mut dc = HashMap::new();
         for s in &self.choices {
-            match OptCh::parse_decision(s)? {
-                OptCh::Name(s) => {
+            match OptDec::parse_decision(s)? {
+                OptDec::Name(s) => {
                     nc.insert(s);
                 }
-                OptCh::KV(dname, idx) => {
+                OptDec::WithDim(dname, idx) => {
                     dc.insert(dname, idx);
                 }
             }

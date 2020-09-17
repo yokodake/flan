@@ -8,7 +8,9 @@ pub mod env;
 pub mod errors;
 
 // re-exports
+#[doc(inline)]
 pub use env::{Dim, Env};
+#[doc(inline)]
 pub use errors::Error;
 
 // imports
@@ -16,6 +18,7 @@ use crate::codemap::Spanned;
 use crate::error::Handler;
 use crate::syntax::{TermK, Terms};
 
+/// typecheck and infer (by mutating `env`) choices and dimensions.
 pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler<Error>) -> Option<()> {
     let mut errors = false;
     for Spanned { node: t, span } in terms {

@@ -1,13 +1,16 @@
 //! The Lexer module
 //!
 //! There are 4 meaningful tokens, anything else is considered text:
-//! - `#CHID{` dimension opening delimiter where `CHID` is made of alphanumeric and underscore `_`
-//! - `##` dimension alternatives separator
+//! - `#DIMID{` dimension opening delimiter where `DIMID` is made of alphanumerics and underscore `_`. Cannot start with numeric.
+//! - `##` choices separator
 //! - `}#` dimension closing delimiter
 //! - `#$IDENTIFIER#` variables where `IDENTIFIER` is made of alphanumeric characters or `!%&'*+-./:<=>?@_`
 //!
 //! For now, there are two escapes (`\#` and `\\`), separators (`##`) need not to be escaped *outside* of dimensions.
-//! @NOTE escape newlines inside of Dimensions?
+//!
+//! @TODO whitespace escape
+//! @TODO escape first whitespace after `#..{`, before `}#` and around `##`.
+//! @TODO allow newline escapes inside dimensions
 
 #![allow(dead_code)]
 use core::str::Chars;
@@ -17,30 +20,34 @@ use crate::error::Handler;
 use crate::syntax;
 use crate::utils::*;
 
+/// parser error
 type PError = syntax::Error;
-/// a `Lexer` is wrapper around a Buffered Reader
-/// a stream of tokens is just like an iterator, so calling `next()` should yield the next token from the source.
 pub struct Lexer<'a> {
-    src: Chars<'a>,
-    /// current position in the reader, helps for Spanned<>
-    pos: Pos,
-    /// number of Open dimension delimiters
-    nest: usize, // @NOTE usize is probably overkill
-    prev: char,
-    cur: Option<char>,
+    /// error handling
     pub handler: &'a mut Handler<PError>,
+
+    pub src: Chars<'a>,
+    /// current position in the reader
+    pub pos: Pos,
+    /// number of Open dimension delimiters
+    pub nest: usize, // @NOTE usize is probably overkill
+    /// @TODO get rid of this field and use peek instead, Chars.clone() doesn't clone the underlying source
+    pub prev: char,
+    pub cur: Option<char>,
 }
 
 // static items are not allowed inside implementations
+/// allowed non-alphanumerics inside IDENTIFIERs
 static VAR_SYMS: [char; 16] = [
     '!', '%', '&', '\'', '*', '+', '-', '.', '/', ':', '<', '=', '>', '?', '@', '_',
 ];
 
 impl<'a> Lexer<'a> {
+    /// `Lexer.prev` is not valid, set to null
     pub fn new(input: &'a str, h: &'a mut Handler<PError>) -> Lexer<'a> {
         Lexer {
             src: input.chars(),
-            /// current position, therefore the index of the result of getc()
+            // current position, therefore the index of the result of getc()
             pos: Pos::from(0 as usize),
             nest: 0,
             handler: h,
@@ -56,7 +63,8 @@ impl<'a> Lexer<'a> {
     fn peek(&self, n: usize) -> char {
         self.src.clone().nth(n).unwrap_or('\0') // EOF
     }
-    /// consumes and
+    /// bumps the src iterator, sets [`Self::cur`] and [`Self::prev`], increments [`Self::pos`]
+    /// `prev` is set to `\0` if cur was `None`
     fn getc(&mut self) -> Option<char> {
         self.cur = self.src.next().sequence(|_| {
             self.prev = self.cur.unwrap_or('\0');
@@ -65,6 +73,7 @@ impl<'a> Lexer<'a> {
         self.cur.clone()
     }
     /// returns the next token
+    /// @REWRITE please...
     pub fn next_token(&mut self) -> Token {
         let start = self.pos;
         while let Some(c) = self.getc() {
@@ -211,16 +220,18 @@ impl<'a> Lexer<'a> {
     }
 }
 
+/// a Spanned Token Kind
 pub type Token = Spanned<TokenK>;
 
 impl Token {
     pub fn is_eof(&self) -> bool {
         self.is(EOF)
     }
-    /// is the token related to dimension or eof
-    pub fn is_dimension(&self) -> bool {
+    /// is the token related to dimension or eof?
+    pub fn is_dimension_or_eof(&self) -> bool {
         !(self.is(Var) || self.is(Text))
     }
+    /// @NOTE copying should be cheap, or is derefing cheaper?
     pub fn is(&self, k: TokenK) -> bool {
         self.node == k
     }
@@ -233,6 +244,8 @@ impl Default for Token {
         Token::new(EOF, Pos::from(0 as u64), Pos::from(0 as u64))
     }
 }
+
+/// Kind of Token
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub enum TokenK {
     Text,
@@ -246,4 +259,5 @@ pub enum TokenK {
     Sepd,
     EOF,
 }
+#[doc(hidden)]
 pub use TokenK::*;

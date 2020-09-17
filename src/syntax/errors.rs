@@ -1,4 +1,4 @@
-#[allow(dead_code)]
+/// Errors for Parsing and Lexing.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Error {
     UnexpectedToken,
@@ -10,7 +10,7 @@ pub enum Error {
 }
 
 impl Error {
-    // if parsing can safely continue or not.
+    /// whether parsing can safely continue or not.
     pub fn is_fatal(&self) -> bool {
         match self {
             // currently only happens in variable names.

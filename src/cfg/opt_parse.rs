@@ -1,15 +1,16 @@
 //! Command line parsing helpers
 use std::io;
 
-/// Choice argument
-pub enum OptCh {
-    /// a choice name
+/// command line passed Decision
+pub enum OptDec {
+    /// by name
     Name(String),
-    /// a (dimension name, [`Index`]) pair
-    KV(String, Index),
+    /// (dimension name, decision index or name) pair.
+    WithDim(String, Index),
 }
-impl OptCh {
-    pub fn parse_decision(str: &String) -> io::Result<OptCh> {
+impl OptDec {
+    /// parse one decision
+    pub fn parse_decision(str: &String) -> io::Result<Self> {
         let mut it = str.splitn(2, '=');
         // splitn will give us at the very least "" as first elem
         let k = it.next().unwrap();
@@ -19,14 +20,14 @@ impl OptCh {
             None => Self::parse_name(k),
         }
     }
-    fn parse_dim(k: &str, i: &str) -> io::Result<OptCh> {
+    fn parse_dim(k: &str, i: &str) -> io::Result<Self> {
         Self::validate_id(k)?;
         let idx = Self::parse_idx(i)?;
-        Ok(OptCh::KV(k.into(), idx))
+        Ok(Self::WithDim(k.into(), idx))
     }
-    fn parse_name(n: &str) -> io::Result<OptCh> {
+    fn parse_name(n: &str) -> io::Result<Self> {
         Self::validate_id(n)?;
-        Ok(OptCh::Name(n.into()))
+        Ok(Self::Name(n.into()))
     }
     fn parse_idx(s: &str) -> io::Result<Index> {
         use std::io::{Error, ErrorKind};
@@ -56,9 +57,12 @@ impl OptCh {
         }
     }
 }
+/// Decision for an explicitly named dimension
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum Index {
+    /// by name
     Name(String),
+    /// by index
     Num(u8),
 }
 

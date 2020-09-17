@@ -5,14 +5,13 @@
 //! The syntax:
 //! ```bnf
 //! Terms := Term*
-//! Term  := Text
-//!        | #$IDENTIFIER#
-//!        | `#CHID{` Terms (`##` Terms)* `}#`
+//! Term  :=  #$IDENTIFIER#                      // variables
+//!        | `#DIMID{` Terms (`##` Terms)* `}#`  // Dimensions
+//!        |  Text                               // anything else
 //!
-//! DIMID := alphanumeric+
-//! IDENTIFIER := (alphanumeric | [!%&'*+-./:<=>?@_])*
+//! DIMID := (alpha | `_`)(alphanumeric | `_`)*
+//! IDENTIFIER := (alphanumeric | [!%&'*+-./:<=>?@_])+
 //! ```
-//! Dimension identifiers (DIMID) should be named for now.
 //!
 //! A whole lot of ascii symbols are accepted in identifiers, probably too much, but we can and I figured it might
 //! be interresting to have variables names of paths to contain slashes for example.
@@ -25,16 +24,17 @@ use crate::syntax::lexer::{Token, TokenK};
 use crate::syntax::Error;
 
 /// type of a parsed expression
-type Parsed<T> = Result<T, Error>;
+pub type Parsed<T> = Result<T, Error>;
 
 pub struct Parser<'a> {
     // @FIXME remove mut
-    handler: &'a mut Handler<Error>,
-    current_token: Token,
-    tokens: TokenStream,
-    src: String,
-    // unmatched open delimiters
-    nest: u8,
+    pub handler: &'a mut Handler<Error>,
+    pub current_token: Token,
+    pub tokens: TokenStream,
+    /// needed?
+    pub src: String,
+    /// unmatched open delimiters
+    pub nest: u8,
 }
 impl Parser<'_> {
     pub fn new<'a>(input: String, h: &'a mut Handler<Error>, ts: TokenStream) -> Parser<'a> {
@@ -98,9 +98,10 @@ impl Parser<'_> {
     pub fn parse_txt(&self) -> Parsed<Term> {
         Ok(Term::text(self.current_token.span))
     }
+    /// parse a sequence of texts and variables
     pub fn parse_alt(&mut self) -> Parsed<Terms> {
         let mut xs = Vec::new();
-        while !self.current_token.is_dimension() {
+        while !self.current_token.is_dimension_or_eof() {
             let x = match self.current_token.kind() {
                 TokenK::Text => self.parse_txt()?,
                 TokenK::Var => self.parse_var()?,
@@ -111,6 +112,7 @@ impl Parser<'_> {
         }
         Ok(xs)
     }
+    /// extract the name of the dimension form the [`Self::current_token`]
     pub fn get_dim_name(&self) -> Name {
         let lo = self.current_token.span.lo_as_usize();
         let hi = self.current_token.span.hi_as_usize();
@@ -168,8 +170,11 @@ impl Parser<'_> {
     }
 }
 
+/// a Variable or Dimension name.
 pub type Name = String;
+/// a list of [`Terms`]
 pub type Terms = Vec<Term>;
+/// a Spanned [`TermK`]
 pub type Term = Spanned<TermK>;
 impl Term {
     pub fn text(s: Span) -> Term {
@@ -184,7 +189,7 @@ impl Term {
             span: s,
         }
     }
-    pub fn dim(n: String, cs: Vec<Terms>, s: Span) -> Term {
+    pub fn dim(n: Name, cs: Vec<Terms>, s: Span) -> Term {
         Term {
             node: TermK::Dimension {
                 name: n,
@@ -194,6 +199,7 @@ impl Term {
         }
     }
 }
+/// the kind of a Term
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub enum TermK {
     Text,

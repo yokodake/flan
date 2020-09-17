@@ -1,5 +1,6 @@
 pub mod codemap;
 
+/// a strict version of haskell's [sequence](https://hackage.haskell.org/package/base-4.12.0.0/docs/src/Data.Traversable.html#sequence)
 pub trait Sequenceable<T> {
     fn sequence<F: FnOnce(&T) -> ()>(self, f: F) -> Self;
 }
