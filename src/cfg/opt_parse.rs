@@ -20,15 +20,18 @@ impl OptDec {
             None => Self::parse_name(k),
         }
     }
+    /// [`WithDim`]
     fn parse_dim(k: &str, i: &str) -> io::Result<Self> {
         Self::validate_id(k)?;
         let idx = Self::parse_idx(i)?;
         Ok(Self::WithDim(k.into(), idx))
     }
+    /// variable name
     fn parse_name(n: &str) -> io::Result<Self> {
         Self::validate_id(n)?;
         Ok(Self::Name(n.into()))
     }
+    /// [`Index`]
     fn parse_idx(s: &str) -> io::Result<Index> {
         use std::io::{Error, ErrorKind};
         use std::num::IntErrorKind;

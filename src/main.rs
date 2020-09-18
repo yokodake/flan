@@ -105,6 +105,9 @@ struct Opt {
     #[structopt(short, long)]
     /// explain what is being done
     verbose: bool,
+    #[structopt(short = "q", long = "query-dimensions")]
+    /// list all dimensions (TODO: that require a decision).
+    query_dims: bool,
     #[structopt(name = "PATH", short = "c", long = "config")]
     /// use this config file instead
     config_file: Option<PathBuf>,
@@ -114,17 +117,17 @@ struct Opt {
     #[structopt(name = "INPUT")]
     /// source file
     file_in: PathBuf,
-    #[structopt(name = "CHOICES")]
-    /// Can be choice_names or Dimension_name=Index pairs. An Index is either a
+    #[structopt(name = "DECISIONS")]
+    /// Can be Choice or Dimension_name=Index pairs. An Index is either a
     /// a choice name or a natural smaller than 128. Valid names contain `_` or alphanumeric chars but
     /// cannot start with a digit
-    choices: Vec<String>,
+    decisions: Vec<String>,
 }
 impl Opt {
     pub fn parse_decisions(&self) -> io::Result<(HashSet<String>, HashMap<String, Index>)> {
         let mut nc = HashSet::new();
         let mut dc = HashMap::new();
-        for s in &self.choices {
+        for s in &self.decisions {
             match OptDec::parse_decision(s)? {
                 OptDec::Name(s) => {
                     nc.insert(s);
