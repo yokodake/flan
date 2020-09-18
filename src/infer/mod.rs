@@ -16,7 +16,7 @@ pub use errors::Error;
 // imports
 use crate::codemap::Spanned;
 use crate::error::Handler;
-use crate::syntax::{TermK, Terms};
+use crate::syntax::{Name, TermK, Terms};
 
 /// typecheck and infer (by mutating `env`) choices and dimensions.
 pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler<Error>) -> Option<()> {
@@ -46,6 +46,9 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler<Error>) -> Opti
                             .print();
                         errors = true;
                     }
+                    for c in children {
+                        errors = check(c, env, handler).is_none() || errors;
+                }
                 }
                 None => {
                     handler
