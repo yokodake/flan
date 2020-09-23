@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use toml::de;
@@ -21,6 +21,8 @@ pub struct Config {
     pub variables: Option<HashMap<String, String>>,
     /// dimension declarations
     pub dimensions: Option<HashMap<String, DimDecl>>,
+    /// source -> destination map
+    pub paths: Option<HashMap<PathBuf, PathBuf>>,
 }
 /// default values for command-line optional arguments.
 #[derive(Deserialize, Debug)]

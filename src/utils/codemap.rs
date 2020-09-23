@@ -15,12 +15,21 @@ pub enum SourceInfo {
     /// we do not need the source for binary files
     Binary,
 }
+/// File info + source
 #[derive(Hash, Debug, Clone, PartialEq)]
 pub struct File {
+    /// file name without path
     pub name: String,
     pub absolute_path: PathBuf,
+    /// relative path, error reporting and such
     pub relative_path: PathBuf,
+    pub destination: PathBuf, 
+    /// Source or its state
     pub src: SourceInfo,
+    /// start positions of lines
+    pub lines: Vec<Pos>,
+    pub start: Pos, 
+    pub end: Pos, 
 }
 
 /// type synonym for easier refactoring
@@ -28,16 +37,16 @@ pub type SrcFile = Arc<RwLock<File>>;
 
 #[derive(Clone, Debug)]
 /// A map of source files. @NOTE Maybe shouldn't be a new type.
-pub struct SrcFileMap(pub Vec<SrcFile>);
-#[allow(unused_variables)]
+pub struct SrcFileMap{pub cfg: String, pub sources: Vec<SrcFile>}
+
 impl SrcFileMap {
     pub fn new() -> Self {
-        SrcFileMap(Vec::new())
+        SrcFileMap { cfg: String::from(""), sources: Vec::new() }
     }
     /// load a file and add it to the map
     pub fn load_file(&mut self, path: &PathBuf) -> io::Result<SrcFile> {
         let file = Arc::new(RwLock::new(Self::path_to_file(path)?));
-        self.0.push(file.clone());
+        self.sources.push(file.clone());
         Ok(file)
     }
     /// helper that builds a [`File`] from a path
@@ -58,6 +67,10 @@ impl SrcFileMap {
             absolute_path,
             relative_path,
             src: SourceInfo::NotLoaded,
+            destination: "".into(),
+            lines: Vec::new(),
+            start: Pos(0),
+            end: Pos(0),
         })
     }
 }
