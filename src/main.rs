@@ -54,7 +54,7 @@ fn dummy(opt: &Opt) {
         }
     };
     let mut map = SrcFileMap::new();
-    match map.load_file(&opt.file_in) {
+    match map.load_file(&opt.file_in, &"".into()) {
         Err(e) => {
             hp.print_all();
             eprintln!("{}", e);

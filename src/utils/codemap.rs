@@ -1,8 +1,10 @@
 //! custom version of [https://docs.rs/codemap/](https://docs.rs/codemap/).
 
+use std::fs::read_to_string;
 use std::io;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -23,37 +25,64 @@ pub struct File {
     pub absolute_path: PathBuf,
     /// relative path, error reporting and such
     pub relative_path: PathBuf,
-    pub destination: PathBuf, 
+    pub destination: PathBuf,
     /// Source or its state
     pub src: SourceInfo,
     /// start positions of lines
     pub lines: Vec<Pos>,
-    pub start: Pos, 
-    pub end: Pos, 
+    pub start: Pos,
+    pub end: Pos,
+}
+impl File {
+    pub fn new(name: String) -> File {
+        File {
+            name,
+            absolute_path: PathBuf::from(""),
+            relative_path: PathBuf::from(""),
+            destination: PathBuf::from(""),
+            src: SourceInfo::Src(String::from("")),
+            lines: Vec::new(),
+            start: Pos(0),
+            end: Pos(0),
+        }
+    }
 }
 
 /// type synonym for easier refactoring
 pub type SrcFile = Arc<RwLock<File>>;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 /// A map of source files. @NOTE Maybe shouldn't be a new type.
-pub struct SrcFileMap{pub cfg: String, pub sources: Vec<SrcFile>}
+pub struct SrcFileMap {
+    pub cfg: Arc<File>,
+    pub sources: Vec<SrcFile>,
+    start: AtomicU64,
+}
 
 impl SrcFileMap {
     pub fn new() -> Self {
-        SrcFileMap { cfg: String::from(""), sources: Vec::new() }
+        SrcFileMap {
+            cfg: Arc::new(File::new(String::from("<config>"))),
+            sources: Vec::new(),
+            start: AtomicU64::new(0),
+        }
     }
     /// load a file and add it to the map
-    pub fn load_file(&mut self, path: &PathBuf) -> io::Result<SrcFile> {
-        let file = Arc::new(RwLock::new(Self::path_to_file(path)?));
-        self.sources.push(file.clone());
-        Ok(file)
+    pub fn load_file(&mut self, path: &PathBuf, dest: &PathBuf) -> io::Result<SrcFile> {
+        let mut file = Self::path_to_file(path, dest)?;
+        let start = self.bump_start(file.end.0);
+        file.start = Pos(start);
+        file.end += file.start;
+        let af = Arc::new(RwLock::new(file));
+        self.sources.push(af.clone());
+        Ok(af)
     }
     /// helper that builds a [`File`] from a path
-    pub fn path_to_file(path: &PathBuf) -> io::Result<File> {
+    pub fn path_to_file(path: &PathBuf, dest: &PathBuf) -> io::Result<File> {
         use std::env::current_dir;
         use std::io::{Error, ErrorKind};
         let absolute_path = path.canonicalize()?;
+        // @TODO
         let relative_path = PathBuf::from("relative/paths/not/implemented/yet");
         if !absolute_path.is_file() {
             Err(Error::new(
@@ -62,16 +91,33 @@ impl SrcFileMap {
             ))?;
         }
         let name = absolute_path.file_name().unwrap().to_string_lossy().into();
+        let (src, len) = match read_to_string(absolute_path.as_path()) {
+            Err(e) => {
+                if e.kind() == ErrorKind::InvalidData {
+                    (SourceInfo::Binary, 1)
+                } else {
+                    return Err(e);
+                }
+            }
+            Ok(s) => {
+                let l = s.len();
+                (SourceInfo::Src(s), l)
+            }
+        };
         Ok(File {
             name,
             absolute_path,
             relative_path,
-            src: SourceInfo::NotLoaded,
-            destination: "".into(),
+            src: src,
+            destination: dest.clone(), // @TODO absolute?
             lines: Vec::new(),
             start: Pos(0),
-            end: Pos(0),
+            end: Pos(len as u64),
         })
+    }
+    fn bump_start(&self, size: u64) -> u64 {
+        use std::sync::atomic::Ordering;
+        self.start.fetch_add(size+1, Ordering::Relaxed)
     }
 }
 
@@ -89,6 +135,11 @@ impl From<PosInner> for Pos {
 impl From<usize> for Pos {
     fn from(p: usize) -> Pos {
         Pos(p as u64)
+    }
+}
+impl Pos {
+    pub fn as_usize(&self) -> usize {
+        self.0 as usize
     }
 }
 impl std::fmt::Display for Pos {
