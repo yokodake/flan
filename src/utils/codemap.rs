@@ -22,9 +22,7 @@ pub enum SourceInfo {
 pub struct File {
     /// file name without path
     pub name: String,
-    pub absolute_path: PathBuf,
-    /// relative path, error reporting and such
-    pub relative_path: PathBuf,
+    pub path: PathBuf,
     pub destination: PathBuf,
     /// Source or its state
     pub src: SourceInfo,
@@ -34,11 +32,11 @@ pub struct File {
     pub end: Pos,
 }
 impl File {
+    /// @TODO
     pub fn new(name: String) -> File {
         File {
             name,
-            absolute_path: PathBuf::from(""),
-            relative_path: PathBuf::from(""),
+            path: PathBuf::from(""),
             destination: PathBuf::from(""),
             src: SourceInfo::Src(String::from("")),
             lines: Vec::new(),
@@ -79,19 +77,16 @@ impl SrcFileMap {
     }
     /// helper that builds a [`File`] from a path
     pub fn path_to_file(path: &PathBuf, dest: &PathBuf) -> io::Result<File> {
-        use std::env::current_dir;
         use std::io::{Error, ErrorKind};
-        let absolute_path = path.canonicalize()?;
         // @TODO
-        let relative_path = PathBuf::from("relative/paths/not/implemented/yet");
-        if !absolute_path.is_file() {
+        if !path.is_file() {
             Err(Error::new(
                 ErrorKind::InvalidInput,
                 format!("`{}` not a file.", path.to_string_lossy()).as_ref(),
             ))?;
         }
-        let name = absolute_path.file_name().unwrap().to_string_lossy().into();
-        let (src, len) = match read_to_string(absolute_path.as_path()) {
+        let name = path.file_name().unwrap().to_string_lossy().into();
+        let (src, len) = match read_to_string(path.as_path()) {
             Err(e) => {
                 if e.kind() == ErrorKind::InvalidData {
                     (SourceInfo::Binary, 1)
@@ -106,18 +101,30 @@ impl SrcFileMap {
         };
         Ok(File {
             name,
-            absolute_path,
-            relative_path,
+            path: path.clone(),
             src: src,
-            destination: dest.clone(), // @TODO absolute?
+            destination: dest.clone(), // @TODO absolute path?
             lines: Vec::new(),
             start: Pos(0),
             end: Pos(len as u64),
         })
     }
+    pub fn line_pos(src: &str, offset: Pos) -> Vec<Pos> {
+        let mut lines = vec![offset];
+        if cfg!(not(any(target_arch = "x86", target_arch = "x86_64"))) {
+            line_pos_slow(src, src.len(), offset, &mut lines);
+        }
+        if is_x86_feature_detected!("avx2") {
+            line_pos_avx2(src, offset, &mut lines);
+        } else if is_x86_feature_detected!("sse2") {
+            line_pos_sse2(src, offset, &mut lines);
+        }
+
+        lines
+    }
     fn bump_start(&self, size: u64) -> u64 {
         use std::sync::atomic::Ordering;
-        self.start.fetch_add(size+1, Ordering::Relaxed)
+        self.start.fetch_add(size + 1, Ordering::Relaxed)
     }
 }
 
@@ -282,4 +289,74 @@ impl<T> Spanned<T> {
             span: Span { lo: lo, hi: hi },
         }
     }
+}
+
+unsafe fn line_pos_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
+    // see: https://doc.rust-lang.org/nightly/nightly-rustc/src/rustc_span/analyze_source_file.rs.html
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    const CHUNK_SIZE: usize = 16;
+    let src_bytes = src.as_bytes();
+    let chunk_count = src.len() / CHUNK_SIZE;
+
+    let mut intra_chunk_offset = 0;
+    for chunk_index in 0..chunk_count {
+        let ptr = src_bytes.as_ptr() as *const __m128i;
+        // loadu because we don't know if aligned to 16bytes
+        // @TODO align before?
+        let chunk = _mm_loadu_si128(ptr.offset(chunk_index as isize));
+
+        // check whether part of UTF-8 multibyte
+        let mb_test = _mm_cmplt_epi8(chunk, _mm_set1_epi8(0));
+        let mb_mask = _mm_movemask_epi8(mb_test);
+
+        if mb_mask == 0 {
+            // only ascii characters
+            assert!(intra_chunk_offset == 0); // why?
+
+            let lines_test = _mm_cmpeq_epi8(chunk, _mm_set1_epi8(b'\n' as i8));
+            let lines_mask = _mm_movemask_epi8(lines_test);
+
+            if lines_mask != 0 {
+                let mut lines_mask = 0xFFFF0000 | lines_mask as u32;
+                let offset = offset + Pos::from(chunk_index * CHUNK_SIZE + 1);
+
+                loop {
+                    let i = lines_mask.trailing_zeros();
+                    if i >= CHUNK_SIZE as u32 {
+                        // end of chunk
+                        break;
+                    }
+
+                    lines.push(Pos(i as u64) + offset);
+                    lines_mask &= (!1) << i;
+                }
+                // done with this chunk
+                continue;
+            } else {
+                //  no newlines, nothing to do.
+                continue;
+            }
+        }
+
+        // slow decode for multibyte chars
+        let start = chunk_index * CHUNK_SIZE + intra_chunk_offset;
+        intra_chunk_offset = line_pos_slow(&src[start..], CHUNK_SIZE - intra_chunk_offset, Pos::from(start) + offset, lines);
+    }
+    // non aligned bytes left
+    let tail_start = chunk_count * CHUNK_SIZE + intra_chunk_offset;
+    if tail_start < src.len() {
+        line_pos_slow(&src[tail_start ..], src.len() - tail_start, Pos(tail_start as u64) + offset, lines);
+    }
+}
+
+unsafe fn line_pos_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
+    panic!("@TODO line_pos_avx2")
+}
+
+fn line_pos_slow(src: &str, len: usize, offset: Pos, lines: &mut Vec<Pos>) -> usize {
+    panic!("@TODO line_pos_slow")
 }
