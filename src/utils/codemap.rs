@@ -115,9 +115,9 @@ impl SrcFileMap {
             line_pos_slow(src, src.len(), offset, &mut lines);
         }
         if is_x86_feature_detected!("avx2") {
-            line_pos_avx2(src, offset, &mut lines);
+            unsafe { line_pos_avx2(src, offset, &mut lines); }
         } else if is_x86_feature_detected!("sse2") {
-            line_pos_sse2(src, offset, &mut lines);
+            unsafe { line_pos_sse2(src, offset, &mut lines); }
         }
 
         lines

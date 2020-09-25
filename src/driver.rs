@@ -139,7 +139,7 @@ pub fn file_to_parser<'a>(h: &'a mut Handler<PError>, source: SrcFile) -> io::Re
     {
         let file = source.read().unwrap();
         src = file.src.clone();
-        apath = file.absolute_path.clone();
+        apath = file.path.clone();
     }
     match src {
         SourceInfo::Binary => {
