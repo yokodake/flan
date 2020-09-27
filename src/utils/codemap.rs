@@ -115,9 +115,13 @@ impl SrcFileMap {
             line_pos_slow(src, src.len(), offset, &mut lines);
         }
         if is_x86_feature_detected!("avx2") {
-            unsafe { line_pos_avx2(src, offset, &mut lines); }
+            unsafe {
+                line_pos_avx2(src, offset, &mut lines);
+            }
         } else if is_x86_feature_detected!("sse2") {
-            unsafe { line_pos_sse2(src, offset, &mut lines); }
+            unsafe {
+                line_pos_sse2(src, offset, &mut lines);
+            }
         }
 
         lines
@@ -302,7 +306,6 @@ unsafe fn line_pos_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
     let src_bytes = src.as_bytes();
     let chunk_count = src.len() / CHUNK_SIZE;
 
-    let mut intra_chunk_offset = 0;
     for chunk_index in 0..chunk_count {
         let ptr = src_bytes.as_ptr() as *const __m128i;
         // loadu because we don't know if aligned to 16bytes
@@ -315,13 +318,13 @@ unsafe fn line_pos_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
 
         if mb_mask == 0 {
             // only ascii characters
-            assert!(intra_chunk_offset == 0); // why?
-
             let lines_test = _mm_cmpeq_epi8(chunk, _mm_set1_epi8(b'\n' as i8));
             let lines_mask = _mm_movemask_epi8(lines_test);
 
             if lines_mask != 0 {
+                // set the 16 irrelevant msb to '1'
                 let mut lines_mask = 0xFFFF0000 | lines_mask as u32;
+                // + 1 because we want the position of the newline start, not the '\n' before
                 let offset = offset + Pos::from(chunk_index * CHUNK_SIZE + 1);
 
                 loop {
@@ -341,15 +344,17 @@ unsafe fn line_pos_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
                 continue;
             }
         }
-
-        // slow decode for multibyte chars
-        let start = chunk_index * CHUNK_SIZE + intra_chunk_offset;
-        intra_chunk_offset = line_pos_slow(&src[start..], CHUNK_SIZE - intra_chunk_offset, Pos::from(start) + offset, lines);
+        // ignore multibyte chars
     }
-    // non aligned bytes left
-    let tail_start = chunk_count * CHUNK_SIZE + intra_chunk_offset;
+    // non aligned bytes on tail
+    let tail_start = chunk_count * CHUNK_SIZE;
     if tail_start < src.len() {
-        line_pos_slow(&src[tail_start ..], src.len() - tail_start, Pos(tail_start as u64) + offset, lines);
+        line_pos_slow(
+            &src[tail_start..],
+            src.len() - tail_start,
+            Pos(tail_start as u64) + offset,
+            lines,
+        );
     }
 }
 
@@ -357,6 +362,13 @@ unsafe fn line_pos_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
     panic!("@TODO line_pos_avx2")
 }
 
-fn line_pos_slow(src: &str, len: usize, offset: Pos, lines: &mut Vec<Pos>) -> usize {
-    panic!("@TODO line_pos_slow")
+fn line_pos_slow(src: &str, len: usize, offset: Pos, lines: &mut Vec<Pos>) {
+    let src_bytes = src.as_bytes();
+    for i in 0..len {
+        let b = unsafe { *src_bytes.get_unchecked(i) };
+        if b == b'\n' {
+            // + 1 because we want the position of the newline start, not the '\n' before
+            lines.push(Pos::from(i) + offset + 1);
+        }
+    }
 }
