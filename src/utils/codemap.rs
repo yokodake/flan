@@ -71,6 +71,9 @@ impl SrcFileMap {
         let start = self.bump_start(file.end.0);
         file.start = Pos(start);
         file.end += file.start;
+        for p in file.lines.iter_mut() {
+            *p += file.start;
+        }
         let af = Arc::new(RwLock::new(file));
         self.sources.push(af.clone());
         Ok(af)
@@ -85,10 +88,13 @@ impl SrcFileMap {
                 format!("`{}` not a file.", path.to_string_lossy()).as_ref(),
             ))?;
         }
+        let lines;
+        let start = Pos(0);
         let name = path.file_name().unwrap().to_string_lossy().into();
         let (src, len) = match read_to_string(path.as_path()) {
             Err(e) => {
                 if e.kind() == ErrorKind::InvalidData {
+                    lines = vec![];
                     (SourceInfo::Binary, 1)
                 } else {
                     return Err(e);
@@ -96,6 +102,7 @@ impl SrcFileMap {
             }
             Ok(s) => {
                 let l = s.len();
+                lines = Self::line_pos(s.as_ref(), start);
                 (SourceInfo::Src(s), l)
             }
         };
@@ -104,8 +111,8 @@ impl SrcFileMap {
             path: path.clone(),
             src: src,
             destination: dest.clone(), // @TODO absolute path?
-            lines: Vec::new(),
-            start: Pos(0),
+            lines,
+            start,
             end: Pos(len as u64),
         })
     }
