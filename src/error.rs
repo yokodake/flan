@@ -221,7 +221,7 @@ impl<K> Handler<K> {
     }
     /// exists in order to avoid code duplication between `print` and `print_all` due to
     /// mutable borrow conflicts of `self`, despite borrowing two different fields
-    /// ```rust
+    /// ```ignore
     /// for e in self.delay_err.iter() { // immutable borrow
     ///   self.print(e) // mutable borrow
     /// }

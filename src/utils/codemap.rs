@@ -136,7 +136,7 @@ pub type PosInner = u64;
 /// A position inside a codemap.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Debug)]
 #[repr(transparent)]
-pub struct Pos(PosInner);
+pub struct Pos(pub PosInner);
 
 impl From<PosInner> for Pos {
     fn from(p: PosInner) -> Pos {
@@ -295,7 +295,7 @@ impl<T> Spanned<T> {
     }
 }
 
-unsafe fn line_pos_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
+pub unsafe fn line_pos_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
     // see: https://doc.rust-lang.org/nightly/nightly-rustc/src/rustc_span/analyze_source_file.rs.html
     #[cfg(target_arch = "x86")]
     use std::arch::x86::*;
@@ -358,11 +358,70 @@ unsafe fn line_pos_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
     }
 }
 
-unsafe fn line_pos_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
-    panic!("@TODO line_pos_avx2")
+pub unsafe fn line_pos_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
+    // see: https://doc.rust-lang.org/nightly/nightly-rustc/src/rustc_span/analyze_source_file.rs.html
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    const CHUNK_SIZE: usize = 32;
+    let src_bytes = src.as_bytes();
+    let chunk_count = src.len() / CHUNK_SIZE;
+
+    for chunk_index in 0..chunk_count {
+        let ptr = src_bytes.as_ptr() as *const __m256i;
+        // loadu because we don't know if aligned to 16bytes
+        // @TODO align before?
+        let chunk = _mm256_loadu_si256(ptr.offset(chunk_index as isize));
+
+        // check whether part of UTF-8 multibyte
+        let mb_test = _mm256_cmpgt_epi8(chunk, _mm256_set1_epi8(0));
+        let mb_mask = _mm256_movemask_epi8(mb_test);
+
+        if mb_mask == -1 {
+            // only ascii characters
+            let lines_test = _mm256_cmpeq_epi8(chunk, _mm256_set1_epi8(b'\n' as i8));
+            let lines_mask = _mm256_movemask_epi8(lines_test);
+
+            if lines_mask != 0 {
+                // set the 16 irrelevant msb to '1'
+                let mut lines_mask: u32 = std::mem::transmute(lines_mask);
+                // + 1 because we want the position of the newline start, not the '\n' before
+                let offset = offset + Pos::from(chunk_index * CHUNK_SIZE + 1);
+
+                loop {
+                    let i = lines_mask.trailing_zeros();
+                    if i >= CHUNK_SIZE as u32 {
+                        // end of chunk
+                        break;
+                    }
+
+                    lines.push(Pos(i as u64) + offset);
+                    lines_mask &= (!1) << i;
+                }
+                // done with this chunk
+                continue;
+            } else {
+                //  no newlines, nothing to do.
+                continue;
+            }
+        }
+        // ignore multibyte chars
+    }
+    // non aligned bytes on tail
+    let tail_start = chunk_count * CHUNK_SIZE;
+    if tail_start < src.len() {
+        line_pos_slow(
+            &src[tail_start..],
+            src.len() - tail_start,
+            Pos(tail_start as u64) + offset,
+            lines,
+        );
+    }
 }
 
-fn line_pos_slow(src: &str, len: usize, offset: Pos, lines: &mut Vec<Pos>) {
+pub fn line_pos_slow(src: &str, len: usize, offset: Pos, lines: &mut Vec<Pos>) {
     let src_bytes = src.as_bytes();
     for i in 0..len {
         let b = unsafe { *src_bytes.get_unchecked(i) };
