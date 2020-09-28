@@ -11,8 +11,6 @@ use std::sync::RwLock;
 #[derive(Hash, Debug, Clone, PartialEq)]
 /// Information about the Source
 pub enum SourceInfo {
-    NotLoaded,
-    Processed,
     Src(String),
     /// we do not need the source for binary files
     Binary,
@@ -44,23 +42,33 @@ impl File {
             end: Pos(0),
         }
     }
+    pub fn is_source(&self) -> bool {
+        match self.src {
+            SourceInfo::Src(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_binary(&self) -> bool {
+        match self.src {
+            SourceInfo::Binary => true,
+            _ => false,
+}
+    }
 }
 
 /// type synonym for easier refactoring
-pub type SrcFile = Arc<RwLock<File>>;
+pub type SrcFile = Arc<File>;
 
 #[derive(Debug)]
 /// A map of source files. @NOTE Maybe shouldn't be a new type.
 pub struct SrcFileMap {
-    pub cfg: Arc<File>,
-    pub sources: Vec<SrcFile>,
+    sources: Vec<SrcFile>,
     start: AtomicU64,
 }
 
 impl SrcFileMap {
     pub fn new() -> Self {
         SrcFileMap {
-            cfg: Arc::new(File::new(String::from("<config>"))),
             sources: Vec::new(),
             start: AtomicU64::new(0),
         }
@@ -74,7 +82,7 @@ impl SrcFileMap {
         for p in file.lines.iter_mut() {
             *p += file.start;
         }
-        let af = Arc::new(RwLock::new(file));
+        let af = Arc::new(file);
         self.sources.push(af.clone());
         Ok(af)
     }

@@ -133,15 +133,7 @@ pub fn string_to_parser<'a>(h: &'a mut Handler<PError>, str: String) -> io::Resu
 pub fn file_to_parser<'a>(h: &'a mut Handler<PError>, source: SrcFile) -> io::Result<Parser<'a>> {
     use crate::codemap::SourceInfo;
     use std::io::{Error, ErrorKind};
-    // @SPEED lots of stupid stuff in here
-    let apath;
-    let src;
-    {
-        let file = source.read().unwrap();
-        src = file.src.clone();
-        apath = file.path.clone();
-    }
-    match src {
+    match &source.src {
         SourceInfo::Binary => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -149,17 +141,5 @@ pub fn file_to_parser<'a>(h: &'a mut Handler<PError>, source: SrcFile) -> io::Re
             ))
         }
         SourceInfo::Src(s) => return Ok(string_to_parser(h, s.clone())?),
-        SourceInfo::NotLoaded => {
-            // @TODO check if it failed in case data is binary => set src as Binary
-            let s = std::fs::read_to_string(&apath)?;
-            let mut file = source.write().unwrap_or_else(|_| todo!("locks"));
-            file.src = SourceInfo::Src(s.clone());
-            return Ok(string_to_parser(h, s)?);
-        }
-        // process again?
-        SourceInfo::Processed => {
-            let s = std::fs::read_to_string(&apath)?;
-            return Ok(string_to_parser(h, s)?);
-        }
-    }
+    };
 }
