@@ -15,7 +15,6 @@
 //!
 //! A whole lot of ascii symbols are accepted in identifiers, probably too much, but we can and I figured it might
 //! be interresting to have variables names of paths to contain slashes for example.
-#![allow(dead_code)]
 use std::collections::VecDeque;
 
 use crate::codemap::{Pos, Span, Spanned};
@@ -51,7 +50,9 @@ impl Parser<'_> {
         p.next_token();
         p
     }
-
+    pub fn parse(&mut self) -> Parsed<Terms> {
+        self.parse_terms()
+    }
     pub fn parse_terms(&mut self) -> Parsed<Terms> {
         let mut terms = Vec::new();
         loop {
@@ -84,6 +85,7 @@ impl Parser<'_> {
                     } else if k == TokenK::Closed {
                         self.nest -= 1;
                     }
+                    // return all the terms so far
                     return Ok(terms);
                 }
                 TokenK::EOF => return Ok(terms),
@@ -135,7 +137,6 @@ impl Parser<'_> {
             match self.current_token.kind() {
                 TokenK::Closed => {
                     cs.push(c);
-                    self.next_token(); // eat Closed
                     return Ok(Term::dim(name, cs, start + self.current_token.span));
                 }
                 TokenK::Sepd => {
