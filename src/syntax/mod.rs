@@ -10,4 +10,4 @@ pub use lexer::Lexer;
 #[doc(inline)]
 pub use parser::{Name, Term, TermK, Terms};
 #[doc(inline)]
-pub use parser::{Parser, TokenStream};
+pub use parser::{Parsed, Parser, TokenStream};

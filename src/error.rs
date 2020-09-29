@@ -152,6 +152,15 @@ pub struct ErrorFlags {
     /// do not print extra notes & suggestions
     pub no_extra: bool,
 }
+impl Default for ErrorFlags {
+    fn default() -> Self {
+        ErrorFlags {
+            report_level: 5,
+            warn_as_error: false,
+            no_extra: false,
+        }
+    }
+}
 
 #[derive(Debug)]
 /// an error handler

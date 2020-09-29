@@ -80,6 +80,7 @@ impl<'a> Lexer<'a> {
     }
     /// returns the next token
     /// @REWRITE please...
+    /// @REFACTOR just rewrite everything.
     pub fn next_token(&mut self) -> Token {
         let start = self.pos;
         while let Some(c) = self.getc() {
@@ -91,6 +92,8 @@ impl<'a> Lexer<'a> {
             }
             match c {
                 '\\' => {
+                    // @FIXME
+                    self.getc();
                     self.getc();
                 }
                 '{' => match self.prev {

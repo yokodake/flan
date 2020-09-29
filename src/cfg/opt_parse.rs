@@ -20,7 +20,7 @@ impl OptDec {
             None => Self::parse_name(k),
         }
     }
-    /// [`WithDim`]
+    /// [`OptDec::WithDim`]
     fn parse_dim(k: &str, i: &str) -> io::Result<Self> {
         Self::validate_id(k)?;
         let idx = Self::parse_idx(i)?;

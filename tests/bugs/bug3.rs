@@ -59,12 +59,7 @@ fn expected_terms() -> Vec<Kind> {
 
 #[test]
 pub fn nesting_parsing() {
-    let flags = ErrorFlags {
-        no_extra: false,
-        report_level: 5,
-        warn_as_error: false,
-    };
-    let mut h = Handler::new(flags);
+    let mut h = Handler::new(ErrorFlags::default());
     let p = string_to_parser(&mut h, SRC.into());
     assert!(p.is_some());
     let terms = p.unwrap().parse();

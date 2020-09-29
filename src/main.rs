@@ -69,8 +69,8 @@ fn dummy(opt: &Opt) {
             Ok(mut p) => {
                 let mut hi = Handler::new(flags);
                 match p
-                    .parse_terms()
-                    .map(|tree| infer::check(&tree, &mut env, &mut hi))
+                    .parse()
+                    // .map(|tree| infer::check(&tree, &mut env, &mut hi))
                 {
                     Err(e) => {
                         eprint!("{:#?}", e);

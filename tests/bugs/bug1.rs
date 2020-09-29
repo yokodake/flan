@@ -16,12 +16,7 @@ fn expected() -> Vec<TokenK> {
 
 #[test]
 pub fn missing_txt() {
-    let flags = ErrorFlags {
-        no_extra: false,
-        report_level: 5,
-        warn_as_error: false,
-    };
-    let mut h = Handler::new(flags);
+    let mut h = Handler::new(ErrorFlags::default());
     let s = source_to_stream(&mut h, SRC);
     assert!(s.is_some());
     assert_eq!(expected(), get_kinds(s.unwrap()))
