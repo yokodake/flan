@@ -102,9 +102,10 @@ pub fn maybe_idx<'a>(i: Option<&'a Index>, choices: &'a Vec<String>) -> Option<(
 
 /// transform a source into a [`TokenStream`]
 pub fn source_to_stream(h: &mut Handler, src: &str) -> Option<TokenStream> {
+    use crate::codemap::Pos;
     // @REFACTOR
     let mut vd = VecDeque::new();
-    let mut lexer = Lexer::new(src, h);
+    let mut lexer = Lexer::new(h, src, Pos::from(0 as usize));
     loop {
         let t = lexer.next_token();
         vd.push_back(t);
@@ -119,7 +120,8 @@ pub fn source_to_stream(h: &mut Handler, src: &str) -> Option<TokenStream> {
 }
 
 pub fn string_to_parser<'a>(h: &'a mut Handler, str: String) -> Option<Parser<'a>> {
-    source_to_stream(h, str.as_ref()).map(move |ts| Parser::new(str, h, ts))
+    use crate::codemap::Pos;
+    source_to_stream(h, str.as_ref()).map(move |ts| Parser::new(h, str, ts, Pos::from(0 as usize)))
 }
 
 pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> io::Result<Parser<'a>> {

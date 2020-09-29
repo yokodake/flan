@@ -18,7 +18,7 @@
 #![allow(dead_code)]
 use std::collections::VecDeque;
 
-use crate::codemap::{Span, Spanned};
+use crate::codemap::{Pos, Span, Spanned};
 use crate::error::Handler;
 use crate::syntax::lexer::{Token, TokenK};
 use crate::syntax::Error;
@@ -35,15 +35,18 @@ pub struct Parser<'a> {
     pub src: String,
     /// unmatched open delimiters
     pub nest: u8,
+    /// absolute position in source map
+    pub offset: Pos,
 }
 impl Parser<'_> {
-    pub fn new<'a>(input: String, h: &'a mut Handler, ts: TokenStream) -> Parser<'a> {
+    pub fn new<'a>(h: &'a mut Handler, input: String, ts: TokenStream, offset: Pos) -> Parser<'a> {
         let mut p = Parser {
             handler: h,
             current_token: Token::default(),
             tokens: ts,
             src: input,
             nest: 0,
+            offset,
         };
         p.next_token();
         p
@@ -89,9 +92,9 @@ impl Parser<'_> {
         }
     }
     pub fn parse_var(&self) -> Parsed<Term> {
-        let lo = self.current_token.span.lo_as_usize();
-        let hi = self.current_token.span.hi_as_usize();
-        // @SAFETY span is guaranteed to be valid by lexer
+        let lo = self.src_idx(self.current_token.span.lo);
+        let hi = self.src_idx(self.current_token.span.hi);
+        // SAFETY: span is guaranteed to be valid by lexer
         let name = unsafe { self.src.get_unchecked(lo + 2..hi - 1) };
         Ok(Term::var(name.into(), self.current_token.span))
     }
@@ -114,8 +117,8 @@ impl Parser<'_> {
     }
     /// extract the name of the dimension form the [`Self::current_token`]
     pub fn get_dim_name(&self) -> Name {
-        let lo = self.current_token.span.lo_as_usize();
-        let hi = self.current_token.span.hi_as_usize();
+        let lo = self.src_idx(self.current_token.span.lo);
+        let hi = self.src_idx(self.current_token.span.hi);
         // @TODO use get_unchecked instead?
         match self.src.get(lo + 1..hi - 2).map(String::from) {
             Some(s) => s,
@@ -168,6 +171,10 @@ impl Parser<'_> {
             self.tokens.get(n)
         }
     }
+    /// a source_map relative position to index in the source
+    fn src_idx(&self, p: Pos) -> usize {
+        (p - self.offset).as_usize()
+    }
 }
 
 /// a Variable or Dimension name.
@@ -177,25 +184,22 @@ pub type Terms = Vec<Term>;
 /// a Spanned [`TermK`]
 pub type Term = Spanned<TermK>;
 impl Term {
-    pub fn text(s: Span) -> Term {
+    pub fn text(span: Span) -> Term {
         Term {
             node: TermK::Text,
-            span: s,
+            span,
         }
     }
-    pub fn var(n: Name, s: Span) -> Term {
+    pub fn var(name: Name, span: Span) -> Term {
         Term {
-            node: TermK::Var(n),
-            span: s,
+            node: TermK::Var(name),
+            span,
         }
     }
-    pub fn dim(n: Name, cs: Vec<Terms>, s: Span) -> Term {
+    pub fn dim(name: Name, children: Vec<Terms>, span: Span) -> Term {
         Term {
-            node: TermK::Dimension {
-                name: n,
-                children: cs,
-            },
-            span: s,
+            node: TermK::Dimension { name, children },
+            span,
         }
     }
 }

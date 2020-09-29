@@ -45,11 +45,11 @@ static VAR_SYMS: [char; 16] = [
 
 impl<'a> Lexer<'a> {
     /// `Lexer.prev` is not valid, set to null
-    pub fn new(input: &'a str, h: &'a mut Handler) -> Lexer<'a> {
+    pub fn new(h: &'a mut Handler, input: &'a str, offset: Pos) -> Lexer<'a> {
         Lexer {
             src: input.chars(),
             // current position, therefore the index of the result of getc()
-            pos: Pos::from(0 as usize),
+            pos: offset,
             nest: 0,
             handler: h,
             prev: '\0',
