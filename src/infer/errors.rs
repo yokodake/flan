@@ -5,10 +5,3 @@ pub enum Error {
     UnknownVariable,
     UnknownDecision,
 }
-
-use crate::error::Pattern;
-impl Pattern<Error> for Error {
-    fn found(&self, e: &Error) -> bool {
-        self == e
-    }
-}

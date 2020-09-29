@@ -24,8 +24,7 @@ use crate::utils::*;
 type PError = syntax::Error;
 pub struct Lexer<'a> {
     /// error handling
-    pub handler: &'a mut Handler<PError>,
-
+    pub handler: &'a mut Handler,
     pub src: Chars<'a>,
     /// current position in the reader
     pub pos: Pos,
@@ -34,6 +33,8 @@ pub struct Lexer<'a> {
     /// @TODO get rid of this field and use peek instead, Chars.clone() doesn't clone the underlying source
     pub prev: char,
     pub cur: Option<char>,
+
+    failure: bool,
 }
 
 // static items are not allowed inside implementations
@@ -44,7 +45,7 @@ static VAR_SYMS: [char; 16] = [
 
 impl<'a> Lexer<'a> {
     /// `Lexer.prev` is not valid, set to null
-    pub fn new(input: &'a str, h: &'a mut Handler<PError>) -> Lexer<'a> {
+    pub fn new(input: &'a str, h: &'a mut Handler) -> Lexer<'a> {
         Lexer {
             src: input.chars(),
             // current position, therefore the index of the result of getc()
@@ -53,7 +54,12 @@ impl<'a> Lexer<'a> {
             handler: h,
             prev: '\0',
             cur: None,
+            failure: false,
         }
+    }
+    /// did we encounter a failing lexing error
+    pub fn failed(&self) -> bool {
+        self.failure
     }
     /// get the next character without consuming it
     fn peek1(&self) -> char {
@@ -107,7 +113,7 @@ impl<'a> Lexer<'a> {
                     _ => match self.peek1() {
                         '{' | '$' | '#' => return self.lex_txt(start),
 
-                        c if Self::is_varstart(c) => return self.lex_txt(start), // might be an dimension opening next
+                        c if Self::is_varstart(c) => return self.lex_txt(start), // might be a `#{` opening next
                         _ => continue,
                     },
                 },
@@ -145,18 +151,18 @@ impl<'a> Lexer<'a> {
             } else if c.is_whitespace() {
                 self.handler
                     .error("Non-terminated variable. Expected `#`, Found whitespace instead.")
-                    .with_kind(PError::NonTerminatedToken)
                     .with_span(span(start, self.pos))
                     .note("Variables have the following syntax: #$variable#")
                     .print();
+                self.failure = true;
                 // return a wrong Var token, consumer of the TokenStream should check errors
                 return Token::new(Var, start, self.pos);
             } else if !err {
                 // if we get none-whitespace illegal characters, and the variable token is still correctly terminated
                 // we can recover, maybe
                 self.handler
+                    // @FIXME illegal characters aren't fatal lexer errors.
                     .error(format!("Unexpected `{}` in variable name.", c).as_ref())
-                    .with_kind(PError::IllegalCharacter)
                     .with_span(span(start, self.pos))
                     .note(Self::identifier_note().as_ref())
                     .print();
@@ -165,12 +171,12 @@ impl<'a> Lexer<'a> {
         }
         self.handler
             .error("Non-terminated variable, expected `#`.")
-            .with_kind(PError::NonTerminatedToken)
             .with_span(span(start, self.pos))
             .note("Variables have the following syntax: #$variable#")
             .print();
+        self.failure = true;
         // aborting here should be necessary because we're already at the end of the stream.
-        // self.handler.abort();
+        // but dunno how we can abort from inside here
         Token::new(Var, start, self.pos)
     }
     /// useless?

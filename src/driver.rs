@@ -6,10 +6,7 @@ use crate::codemap::SrcFile;
 use crate::env::{Dim, Env};
 use crate::error::Handler;
 use crate::opt_parse::Index;
-use crate::syntax;
 use crate::syntax::{Lexer, Parser, TokenStream};
-
-type PError = syntax::Error;
 
 pub fn make_env(
     variables: Vec<(String, String)>,
@@ -104,33 +101,28 @@ pub fn maybe_idx<'a>(i: Option<&'a Index>, choices: &'a Vec<String>) -> Option<(
 }
 
 /// transform a source into a [`TokenStream`]
-pub fn source_to_stream(h: &mut Handler<PError>, src: &str) -> TokenStream {
+pub fn source_to_stream(h: &mut Handler, src: &str) -> Option<TokenStream> {
+    // @REFACTOR
     let mut vd = VecDeque::new();
     let mut lexer = Lexer::new(src, h);
     loop {
         let t = lexer.next_token();
         vd.push_back(t);
+        if lexer.failed() {
+            return None;
+        }
         if t.is_eof() {
             break;
         }
     }
-    vd
+    Some(vd)
 }
 
-pub fn string_to_parser<'a>(h: &'a mut Handler<PError>, str: String) -> io::Result<Parser<'a>> {
-    let ts = source_to_stream(h, str.as_ref());
-    if h.find(&PError::is_fatal).is_none() {
-        Ok(Parser::new(str, h, ts))
-    } else {
-        // @TODO custom error instead of io::Error
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Aborting due to previous errors.",
-        ))
-    }
+pub fn string_to_parser<'a>(h: &'a mut Handler, str: String) -> Option<Parser<'a>> {
+    source_to_stream(h, str.as_ref()).map(move |ts| Parser::new(str, h, ts))
 }
 
-pub fn file_to_parser<'a>(h: &'a mut Handler<PError>, source: SrcFile) -> io::Result<Parser<'a>> {
+pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> io::Result<Parser<'a>> {
     use crate::codemap::SourceInfo;
     use std::io::{Error, ErrorKind};
     match &source.src {
@@ -140,6 +132,9 @@ pub fn file_to_parser<'a>(h: &'a mut Handler<PError>, source: SrcFile) -> io::Re
                 "binary data cannot be parsed",
             ))
         }
-        SourceInfo::Src(s) => return Ok(string_to_parser(h, s.clone())?),
+        SourceInfo::Src(s) => {
+            return Ok(string_to_parser(h, s.clone())
+                .ok_or_else(|| Error::new(ErrorKind::Other, "aborting due to previous errors"))?)
+        }
     };
 }

@@ -1,3 +1,4 @@
+#![allow(non_upper_case_globals)]
 use flan::codemap;
 use flan::codemap::Pos;
 

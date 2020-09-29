@@ -20,9 +20,3 @@ impl Error {
         }
     }
 }
-use crate::error::Pattern;
-impl Pattern<Error> for Error {
-    fn found(&self, t: &Error) -> bool {
-        self == t
-    }
-}

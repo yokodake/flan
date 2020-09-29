@@ -1,9 +1,4 @@
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-
-use crate::codemap::SrcFileMap;
-use crate::error::Handler;
-use crate::infer::Error;
+use std::collections::HashMap;
 
 // @TODO use symbols
 #[derive(Clone, Debug)]

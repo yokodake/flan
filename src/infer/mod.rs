@@ -21,7 +21,7 @@ use crate::error::Handler;
 use crate::syntax::{Name, TermK, Terms};
 
 /// typecheck and infer (by mutating `env`) choices and dimensions.
-pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler<Error>) -> Option<()> {
+pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler) -> Option<()> {
     let mut errors = false;
     for Spanned { node: t, span } in terms {
         match t {
@@ -31,7 +31,7 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler<Error>) -> Opti
                     handler
                         .error(format!("Undeclared variable `{}`.", name).as_ref())
                         .with_span(*span)
-                        .with_kind(Error::UnknownVariable)
+                        // @FIXME .with_kind(Error::UnknownVariable)
                         .print();
                     errors = true;
                 }
@@ -50,7 +50,7 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler<Error>) -> Opti
                     handler
                         .error(format!("Unknown dimension `{}`.", name).as_ref())
                         .with_span(*span)
-                        .with_kind(Error::UnknownDecision)
+                        // @FIXME .with_kind(Error::UnknownDecision) 
                         .note("Decision inference is not supported yet. This dimensions requires a decision given explicitly.")
                         .note("Postponed dimension declaration (in source files) is not supported yet.")
                         .print();
@@ -70,7 +70,7 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler<Error>) -> Opti
 /// @TODO merge with [`check`] ?
 pub fn collect<'a>(
     terms: &Terms,
-    handler: &mut Handler<Error>,
+    handler: &mut Handler,
     dims: &'a mut HashMap<String, u8>,
 ) -> &'a mut HashMap<Name, u8> {
     for Spanned { node, span } in terms {
@@ -96,7 +96,7 @@ pub fn collect<'a>(
     dims
 }
 
-pub fn error_size_conflict(handler: &mut Handler<Error>, name: &String, span: Span) {
+pub fn error_size_conflict(handler: &mut Handler, name: &String, span: Span) {
     // @TODO get span of declaration or previous use
     handler
         .error(format!("Conflicting number of choices for dimension `{}`.", name).as_ref())

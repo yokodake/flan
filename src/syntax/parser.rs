@@ -28,7 +28,7 @@ pub type Parsed<T> = Result<T, Error>;
 
 pub struct Parser<'a> {
     // @FIXME remove mut
-    pub handler: &'a mut Handler<Error>,
+    pub handler: &'a mut Handler,
     pub current_token: Token,
     pub tokens: TokenStream,
     /// needed?
@@ -37,7 +37,7 @@ pub struct Parser<'a> {
     pub nest: u8,
 }
 impl Parser<'_> {
-    pub fn new<'a>(input: String, h: &'a mut Handler<Error>, ts: TokenStream) -> Parser<'a> {
+    pub fn new<'a>(input: String, h: &'a mut Handler, ts: TokenStream) -> Parser<'a> {
         let mut p = Parser {
             handler: h,
             current_token: Token::default(),
@@ -75,7 +75,7 @@ impl Parser<'_> {
                                 .as_ref(),
                             )
                             .with_span(self.current_token.span)
-                            .with_kind(Error::UnexpectedToken)
+                            // @FIXME .with_kind(Error::UnexpectedToken)
                             .delay();
                         return Err(Error::UnexpectedToken);
                     } else if k == TokenK::Closed {
@@ -144,7 +144,7 @@ impl Parser<'_> {
                     self.handler
                         .error("Unclosed dimension delimiter. Expected `}#`.")
                         .with_span(start)
-                        .with_kind(Error::UnclosedDelimiter)
+                        // @FIXME .with_kind(Error::UnclosedDelimiter)
                         .delay();
                     return Err(Error::UnclosedDelimiter);
                 }

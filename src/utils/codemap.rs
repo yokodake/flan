@@ -6,7 +6,6 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 #[derive(Hash, Debug, Clone, PartialEq)]
 /// Information about the Source
@@ -52,7 +51,7 @@ impl File {
         match self.src {
             SourceInfo::Binary => true,
             _ => false,
-}
+        }
     }
 }
 
@@ -140,6 +139,21 @@ impl SrcFileMap {
         }
 
         lines
+    }
+    pub fn exists(&self, span: Span) -> bool {
+        // @SPEED treshold for linear search
+        use std::cmp::Ordering;
+        self.sources
+            .binary_search_by(|s| {
+                if span.is_inbounds(s.start, s.end) {
+                    return Ordering::Equal;
+                } else if span.hi <= s.start {
+                    return Ordering::Less;
+                } else {
+                    return Ordering::Greater;
+                }
+            })
+            .is_ok()
     }
     fn bump_start(&self, size: u64) -> u64 {
         use std::sync::atomic::Ordering;
@@ -257,6 +271,7 @@ impl Span {
             hi: Pos(hi),
         }
     }
+    /// makes a subspan from inside (`offset = span.lo`)
     /// Panics if begin and end are invalid
     pub fn subspan(&self, begin: u64, end: u64) -> Span {
         assert!(end >= begin);
@@ -265,6 +280,13 @@ impl Span {
             lo: self.lo + begin,
             hi: self.lo + end,
         }
+    }
+    pub fn is_inbounds(&self, begin: Pos, end: Pos) -> bool {
+        begin <= self.lo && end >= self.hi && self.lo <= end && self.hi >= begin
+        // redundant?
+    }
+    pub fn contains(&self, p: Pos) -> bool {
+        self.lo <= p && self.hi >= p
     }
     /// computes length of the span
     pub fn len(&self) -> u64 {
@@ -327,39 +349,31 @@ pub unsafe fn line_pos_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
         // @TODO align before?
         let chunk = _mm_loadu_si128(ptr.offset(chunk_index as isize));
 
-        // check whether part of UTF-8 multibyte
-        let mb_test = _mm_cmplt_epi8(chunk, _mm_set1_epi8(0));
-        let mb_mask = _mm_movemask_epi8(mb_test);
+        let lines_test = _mm_cmpeq_epi8(chunk, _mm_set1_epi8(b'\n' as i8));
+        let lines_mask = _mm_movemask_epi8(lines_test);
 
-        if mb_mask == 0 {
-            // only ascii characters
-            let lines_test = _mm_cmpeq_epi8(chunk, _mm_set1_epi8(b'\n' as i8));
-            let lines_mask = _mm_movemask_epi8(lines_test);
+        if lines_mask != 0 {
+            // set the 16 irrelevant msb to '1'
+            let mut lines_mask = 0xFFFF0000 | lines_mask as u32;
+            // + 1 because we want the position of the newline start, not the '\n' before
+            let offset = offset + Pos::from(chunk_index * CHUNK_SIZE + 1);
 
-            if lines_mask != 0 {
-                // set the 16 irrelevant msb to '1'
-                let mut lines_mask = 0xFFFF0000 | lines_mask as u32;
-                // + 1 because we want the position of the newline start, not the '\n' before
-                let offset = offset + Pos::from(chunk_index * CHUNK_SIZE + 1);
-
-                loop {
-                    let i = lines_mask.trailing_zeros();
-                    if i >= CHUNK_SIZE as u32 {
-                        // end of chunk
-                        break;
-                    }
-
-                    lines.push(Pos(i as u64) + offset);
-                    lines_mask &= (!1) << i;
+            loop {
+                let i = lines_mask.trailing_zeros();
+                if i >= CHUNK_SIZE as u32 {
+                    // end of chunk
+                    break;
                 }
-                // done with this chunk
-                continue;
-            } else {
-                //  no newlines, nothing to do.
-                continue;
+
+                lines.push(Pos(i as u64) + offset);
+                lines_mask &= (!1) << i;
             }
+            // done with this chunk
+            continue;
+        } else {
+            //  no newlines, nothing to do.
+            continue;
         }
-        // ignore multibyte chars
     }
     // non aligned bytes on tail
     let tail_start = chunk_count * CHUNK_SIZE;
@@ -390,39 +404,31 @@ pub unsafe fn line_pos_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
         // @TODO align before?
         let chunk = _mm256_loadu_si256(ptr.offset(chunk_index as isize));
 
-        // check whether part of UTF-8 multibyte
-        let mb_test = _mm256_cmpgt_epi8(chunk, _mm256_set1_epi8(0));
-        let mb_mask = _mm256_movemask_epi8(mb_test);
+        let lines_test = _mm256_cmpeq_epi8(chunk, _mm256_set1_epi8(b'\n' as i8));
+        let lines_mask = _mm256_movemask_epi8(lines_test);
 
-        if mb_mask == -1 {
-            // only ascii characters
-            let lines_test = _mm256_cmpeq_epi8(chunk, _mm256_set1_epi8(b'\n' as i8));
-            let lines_mask = _mm256_movemask_epi8(lines_test);
+        if lines_mask != 0 {
+            // set the 16 irrelevant msb to '1'
+            let mut lines_mask: u32 = std::mem::transmute(lines_mask);
+            // + 1 because we want the position of the newline start, not the '\n' before
+            let offset = offset + Pos::from(chunk_index * CHUNK_SIZE + 1);
 
-            if lines_mask != 0 {
-                // set the 16 irrelevant msb to '1'
-                let mut lines_mask: u32 = std::mem::transmute(lines_mask);
-                // + 1 because we want the position of the newline start, not the '\n' before
-                let offset = offset + Pos::from(chunk_index * CHUNK_SIZE + 1);
-
-                loop {
-                    let i = lines_mask.trailing_zeros();
-                    if i >= CHUNK_SIZE as u32 {
-                        // end of chunk
-                        break;
-                    }
-
-                    lines.push(Pos(i as u64) + offset);
-                    lines_mask &= (!1) << i;
+            loop {
+                let i = lines_mask.trailing_zeros();
+                if i >= CHUNK_SIZE as u32 {
+                    // end of chunk
+                    break;
                 }
-                // done with this chunk
-                continue;
-            } else {
-                //  no newlines, nothing to do.
-                continue;
+
+                lines.push(Pos(i as u64) + offset);
+                lines_mask &= (!1) << i;
             }
+            // done with this chunk
+            continue;
+        } else {
+            //  no newlines, nothing to do.
+            continue;
         }
-        // ignore multibyte chars
     }
     // non aligned bytes on tail
     let tail_start = chunk_count * CHUNK_SIZE;
