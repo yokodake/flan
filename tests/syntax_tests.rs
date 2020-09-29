@@ -107,3 +107,50 @@ fn parse_vars() {
     ];
     assert_eq!(expected, get_kinds(ts));
 }
+#[test]
+fn nothing() {
+    let src = "";
+    {
+        use TokenK::*;
+        let tokens = lex_str(src);
+        let expected: Vec<TokenK> = vec![EOF];
+        assert_eq!(expected, tokens);
+    }
+    {
+        let terms = parse_str(src);
+        assert!(terms.is_ok());
+        let expected: Vec<Kind> = vec![];
+        assert_eq!(expected, get_kinds(terms.unwrap()));
+    }
+}
+#[test]
+fn one_var() {
+    use Kind::*;
+    let src = "#$foo#";
+    let r_ts = parse_str(src);
+    assert!(r_ts.is_ok());
+    let ts = r_ts.unwrap();
+    let expected = vec![Var("foo".into())];
+    assert_eq!(expected, get_kinds(ts));
+}
+#[test]
+fn empty_choices() {
+    use Kind::*;
+    let src = "#foo{##}#";
+    let r_ts = parse_str(src);
+    assert!(r_ts.is_ok());
+    let ts = r_ts.unwrap();
+    let expected = vec![Dim("foo".into(), vec![vec![], vec![]])];
+    assert_eq!(expected, get_kinds(ts));
+}
+
+#[test]
+fn one_empty_choice() {
+    use Kind::*;
+    let src = "#foo{}#";
+    let r_ts = parse_str(src);
+    assert!(r_ts.is_ok());
+    let ts = r_ts.unwrap();
+    let expected = vec![Dim("foo".into(), vec![vec![]])];
+    assert_eq!(expected, get_kinds(ts));
+}

@@ -123,6 +123,7 @@ impl<'a> Lexer<'a> {
                         }
                     }
                     '}' => return self.lex_closed(start),
+                    '\0' => return self.next_token(),
                     _ => match self.peek1() {
                         '{' | '$' | '#' => return self.lex_txt(start),
 
