@@ -78,3 +78,32 @@ fn escaped_vars() {
     assert_eq!(EOF, ts.remove(ts.len() - 1));
     assert!(ts.iter().all(|k| k == &Text));
 }
+#[test]
+fn lex_vars() {
+    use TokenK::*;
+    let src = "some text #$_var1# #$_2# #dim{#$inside### more text }# another #$last_var#";
+    let tokens = lex_str(src);
+    let expected = vec![
+        Text, Var, Text, Var, Text, Opend, Var, Sepd, Text, Closed, Text, Var, EOF,
+    ];
+    assert_eq!(expected, tokens);
+}
+#[test]
+fn parse_vars() {
+    use Kind::*;
+    let src = "some text #$_var1# #$_2# #dim{#$inside### more text }# another #$last_var#";
+    let r_ts = parse_str(src);
+    assert!(r_ts.is_ok());
+    let ts = r_ts.unwrap();
+    let expected = vec![
+        Txt,
+        Var("_var1".into()),
+        Txt,
+        Var("_2".into()),
+        Txt,
+        Dim("dim".into(), vec![vec![Var("inside".into())], vec![Txt]]),
+        Txt,
+        Var("last_var".into()),
+    ];
+    assert_eq!(expected, get_kinds(ts));
+}

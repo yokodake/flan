@@ -72,10 +72,20 @@ impl<'a> Lexer<'a> {
     /// bumps the src iterator, sets [`Self::cur`] and [`Self::prev`], increments [`Self::pos`]
     /// `prev` is set to `\0` if cur was `None`
     fn getc(&mut self) -> Option<char> {
-        self.cur = self.src.next().sequence(|_| {
-            self.prev = self.cur.unwrap_or('\0');
-            self.pos += 1
-        });
+        // @FIXME
+        self.prev = self.cur.unwrap_or('\0');
+        self.cur = match self.src.next() {
+            Some(c) => {
+                self.pos += c.len_utf8() as u64;
+                Some(c)
+            }
+            None => {
+                if self.prev != '\0' {
+                    self.pos += 1;
+                }
+                None
+            }
+        };
         self.cur.clone()
     }
     /// returns the next token
