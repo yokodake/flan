@@ -122,7 +122,7 @@ impl Parser<'_> {
         let lo = self.src_idx(self.current_token.span.lo);
         let hi = self.src_idx(self.current_token.span.hi);
         // @TODO use get_unchecked instead?
-        match self.src.get(lo + 1..hi - 2).map(String::from) {
+        match self.src.get(lo + 1..hi - 1).map(String::from) {
             Some(s) => s,
             None => String::from(""),
         }

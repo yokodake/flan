@@ -15,10 +15,13 @@
 #![allow(dead_code)]
 use core::str::Chars;
 
-use crate::codemap::{span, Pos, Spanned};
 use crate::error::Handler;
 use crate::syntax;
 use crate::utils::*;
+use crate::{
+    codemap::{span, Pos, Spanned},
+    debug,
+};
 
 /// parser error
 type PError = syntax::Error;
@@ -31,8 +34,8 @@ pub struct Lexer<'a> {
     /// number of Open dimension delimiters
     pub nest: usize, // @NOTE usize is probably overkill
     /// @TODO get rid of this field and use peek instead, Chars.clone() doesn't clone the underlying source
-    pub prev: char,
-    pub cur: Option<char>,
+    next: Option<char>,
+    current: Option<char>,
 
     failure: bool,
 }
@@ -46,22 +49,28 @@ static VAR_SYMS: [char; 16] = [
 impl<'a> Lexer<'a> {
     /// `Lexer.prev` is not valid, set to null
     pub fn new(h: &'a mut Handler, input: &'a str, offset: Pos) -> Lexer<'a> {
-        Lexer {
+        let mut l = Lexer {
             src: input.chars(),
             // current position, therefore the index of the result of getc()
             pos: offset,
             nest: 0,
             handler: h,
-            prev: '\0',
-            cur: None,
+            current: None,
+            next: None,
             failure: false,
-        }
+        };
+        l.current = l.src.next();
+        l.next = l.src.next();
+        l
     }
     /// did we encounter a failing lexing error
     pub fn failed(&self) -> bool {
         self.failure
     }
     /// get the next character without consuming it
+    fn peek0(&self) -> char {
+        self.next.unwrap_or('\0')
+    }
     fn peek1(&self) -> char {
         self.peek(0)
     }
@@ -69,77 +78,78 @@ impl<'a> Lexer<'a> {
     fn peek(&self, n: usize) -> char {
         self.src.clone().nth(n).unwrap_or('\0') // EOF
     }
-    /// bumps the src iterator, sets [`Self::cur`] and [`Self::prev`], increments [`Self::pos`]
-    /// `prev` is set to `\0` if cur was `None`
-    fn getc(&mut self) -> Option<char> {
-        // @FIXME
-        self.prev = self.cur.unwrap_or('\0');
-        self.cur = match self.src.next() {
-            Some(c) => {
-                self.pos += c.len_utf8() as u64;
-                Some(c)
-            }
-            None => {
-                if self.prev != '\0' {
-                    self.pos += 1;
-                }
-                None
-            }
-        };
-        self.cur.clone()
+    /// bumps the src iterator, sets [`Self::current`] and [`Self::next`], increments [`Self::pos`] based on current.
+    /// returns the [`Self::current`]
+    fn bump(&mut self) -> Option<char> {
+        self.current = self.next;
+        self.next = self.src.next();
+        // @FIXME don't increment more than once
+        self.pos += self.current.map_or(1, char::len_utf8) as u64;
+        self.current.clone()
     }
-    /// returns the next token
-    /// @REWRITE please...
-    /// @REFACTOR just rewrite everything.
+    /// lexes the next token
     pub fn next_token(&mut self) -> Token {
         let start = self.pos;
-        while let Some(c) = self.getc() {
-            if self.prev == '#' && Self::is_varstart(c) {
-                match self.lex_opend_maybe(start - 1) {
-                    Some(t) => return t,
-                    None => {}
+        match self.current {
+            None => return Spanned::new(EOF, start, self.pos),
+            Some('\\') => match self.next {
+                Some('#') | Some('}') => {
+                    self.bump(); // eat '\'
+                    self.bump(); // eat escaped char
+                    return self.next_token();
+                }
+                _ => {}
+            },
+            // eat the '#' to avoid double `self.bump` in helper functions?
+            Some('#') => match self.next {
+                Some('#') => {
+                    if self.nest > 0 {
+                        return self.lex_sepd(start);
+                    }
+                }
+                Some('$') => return self.lex_var(start),
+                Some(c) if Self::is_varstart(c) => {
+                    if let Some(opend) = self.lex_opend_maybe(start) {
+                        return opend;
+                    }
+                }
+                // if None => return txt ?
+                _ => {} // fallthrough
+            },
+            Some('}') => {
+                if self.next == Some('#') {
+                    return self.lex_closed(start);
                 }
             }
+            _ => {} // fall-through
+        }
+        // current isn't a meaningful lexeme start, so we can consume txt until next token
+        while let Some(c) = self.bump() {
             match c {
-                '\\' => {
-                    // @FIXME
-                    self.getc();
-                    self.getc();
-                }
-                '{' => match self.prev {
-                    '#' => continue, // @FIXME either fail or warn.
-                    _ => continue,
-                },
-                '$' => match self.prev {
-                    '#' => return self.lex_var(start - 1),
-                    _ => continue,
-                },
-                '#' => match self.prev {
+                '#' => match self.peek0() {
                     '#' => {
                         if self.nest > 0 {
-                            return self.lex_sepd(start - 1);
-                        } else {
-                            continue;
+                            return self.lex_txt(start, self.pos - 1);
                         }
                     }
-                    '}' => return self.lex_closed(start),
-                    '\0' => return self.next_token(),
-                    _ => match self.peek1() {
-                        '{' | '$' | '#' => return self.lex_txt(start),
-
-                        c if Self::is_varstart(c) => return self.lex_txt(start), // might be a `#{` opening next
-                        _ => continue,
-                    },
-                },
-                '}' => match self.peek1() {
-                    '#' => return self.lex_txt(start),
+                    '$' => return self.lex_txt(start, self.pos - 1),
+                    c if Self::is_varstart(c) => return self.lex_txt(start, self.pos - 1), // can we avoid this
                     _ => continue,
                 },
+                '}' => {
+                    if self.peek0() == '#' {
+                        return self.lex_txt(start, self.pos - 1);
+                    }
+                }
+                '\\' => {
+                    self.bump(); // eat '\'
+                    continue; // ignore escaped
+                }
                 _ => continue,
-            };
+            }
         }
         if start != self.pos {
-            self.lex_txt(start)
+            self.lex_txt(start, self.pos)
         } else {
             Spanned::new(EOF, start, self.pos)
         }
@@ -151,17 +161,20 @@ impl<'a> Lexer<'a> {
     pub fn is_varsymbol(c: char) -> bool {
         c.is_alphanumeric() || VAR_SYMS.contains(&c)
     }
-    pub fn lex_txt(&self, start: Pos) -> Token {
-        Token::new(Text, start, self.pos)
+    pub fn lex_txt(&self, start: Pos, end: Pos) -> Token {
+        Token::new(Text, start, end)
     }
     pub fn lex_var(&mut self, start: Pos) -> Token {
         let mut err = false;
-        while let Some(c) = self.getc() {
+
+        self.bump(); // eat '#'
+        self.bump(); // eat '$'
+        while let Some(c) = self.bump() {
             if Self::is_varsymbol(c) {
                 continue;
             } else if c == '#' {
-                self.getc(); // eat it
-                return Token::new(Var, start, self.pos - 1);
+                self.bump(); // eat it
+                return Token::new(Var, start, self.pos);
             } else if c.is_whitespace() {
                 self.handler
                     .error("Non-terminated variable. Expected `#`, Found whitespace instead.")
@@ -175,7 +188,7 @@ impl<'a> Lexer<'a> {
                 // if we get none-whitespace illegal characters, and the variable token is still correctly terminated
                 // we can recover, maybe
                 self.handler
-                    // @FIXME illegal characters aren't fatal lexer errors.
+                    // @FIXME illegal characters aren't fatal lexer errors ?
                     .error(format!("Unexpected `{}` in variable name.", c).as_ref())
                     .with_span(span(start, self.pos))
                     .note(Self::identifier_note().as_ref())
@@ -190,36 +203,37 @@ impl<'a> Lexer<'a> {
             .print();
         self.failure = true;
         // aborting here should be necessary because we're already at the end of the stream.
-        // but dunno how we can abort from inside here
+        // but dunno of a clean way
         Token::new(Var, start, self.pos)
     }
-    /// useless?
-    pub fn lex_opend(&mut self, start: Pos) -> Token {
-        self.nest += 1;
-        Token::new(Opend, start, self.pos)
-    }
     pub fn lex_opend_maybe(&mut self, start: Pos) -> Option<Token> {
-        while let Some(c) = self.getc() {
+        // eat opening '#'
+        self.bump();
+        while let Some(c) = self.current {
             if c.is_alphanumeric() || c == '_' {
-                continue;
+                // fallthrough
             } else if c == '{' {
-                self.getc();
+                self.bump(); // eat '{'
                 self.nest += 1;
                 return Some(Token::new(Opend, start, self.pos));
             } else {
                 return None;
             }
+            self.bump();
         }
         None
     }
     pub fn lex_closed(&mut self, start: Pos) -> Token {
         // Just prevent underflow. The parser will catch the error.
-        self.getc();
+        // should be asserts?
+        self.bump(); // eat '}'
+        self.bump(); // eat '#'
         self.nest = std::cmp::max(self.nest, 1) - 1;
         Token::new(Closed, start, self.pos)
     }
     pub fn lex_sepd(&mut self, start: Pos) -> Token {
-        self.getc(); // eat the '#'
+        self.bump(); // eat the '#'
+        self.bump(); // eat the '#'
         Token::new(Sepd, start, self.pos)
     }
 
