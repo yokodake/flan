@@ -1,6 +1,6 @@
 use flan::error::{ErrorFlags, Handler};
 use flan::sourcemap::Spanned;
-use flan::syntax::lexer::TokenK;
+use flan::syntax::lexer::{Token, TokenK};
 use flan::syntax::{Parsed, TermK, Terms};
 
 type Kinds = Vec<Kind>;
@@ -44,6 +44,17 @@ fn lex_str(src: &str) -> Vec<TokenK> {
     let s = source_to_stream(&mut h, src);
     assert!(s.is_some());
     s.unwrap().iter().map(|t| t.node).collect()
+}
+fn stream_str(src: &str) -> Vec<Token> {
+    use flan::driver::source_to_stream;
+    let mut h = Handler::new(ErrorFlags::default());
+    let s = source_to_stream(&mut h, src);
+    assert!(s.is_some());
+    let mut v = Vec::new();
+    for &t in s.unwrap().iter() {
+        v.push(t)
+    }
+    v
 }
 
 #[test]
@@ -153,4 +164,67 @@ fn one_empty_choice() {
     let ts = r_ts.unwrap();
     let expected = vec![Dim("foo".into(), vec![vec![]])];
     assert_eq!(expected, get_kinds(ts));
+}
+
+#[test]
+fn one_txt_span() {
+    use flan::syntax::lexer::Token;
+    use TokenK::*;
+    let src = "0123456789";
+    let toks = stream_str(src);
+    let expected = vec![
+        Token::new_lit(Text, 0, 9),
+        Token::new_lit(EOF, src.len(), src.len()),
+    ];
+    assert_eq!(expected, toks);
+}
+#[test]
+fn one_var_span() {
+    use flan::syntax::lexer::Token;
+    use TokenK::*;
+    let src = "#$var#";
+    let toks = stream_str(src);
+    let expected = vec![
+        Token::new_lit(Var, 0, src.len() - 1),
+        Token::new_lit(EOF, src.len(), src.len()),
+    ];
+    assert_eq!(expected, toks);
+}
+#[test]
+fn one_opend_span() {
+    use flan::syntax::lexer::Token;
+    use TokenK::*;
+    let src = "#foo{";
+    let toks = stream_str(src);
+    let expected = vec![
+        Token::new_lit(Opend, 0, src.len() - 1),
+        Token::new_lit(EOF, src.len(), src.len()),
+    ];
+    assert_eq!(expected, toks);
+}
+#[test]
+fn one_closed_span() {
+    use flan::syntax::lexer::Token;
+    use TokenK::*;
+    let src = "}#";
+    let toks = stream_str(src);
+    let expected = vec![
+        Token::new_lit(Closed, 0, 1),
+        Token::new_lit(EOF, src.len(), src.len()),
+    ];
+    assert_eq!(expected, toks);
+}
+#[test]
+fn one_sepd_span() {
+    use flan::syntax::lexer::Token;
+    use TokenK::*;
+    let src = "#_{##}#";
+    let toks = stream_str(src);
+    let expected = vec![
+        Token::new_lit(Opend, 0, 2),
+        Token::new_lit(Sepd, 3, 4),
+        Token::new_lit(Closed, 5, 6),
+        Token::new_lit(EOF, src.len(), src.len()),
+    ];
+    assert_eq!(expected, toks);
 }

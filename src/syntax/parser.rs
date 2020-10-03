@@ -97,7 +97,7 @@ impl Parser<'_> {
         let lo = self.src_idx(self.current_token.span.lo);
         let hi = self.src_idx(self.current_token.span.hi);
         // SAFETY: span is guaranteed to be valid by lexer
-        let name = unsafe { self.src.get_unchecked(lo + 2..hi - 1) };
+        let name = unsafe { self.src.get_unchecked(lo + 2..hi) };
         Ok(Term::var(name.into(), self.current_token.span))
     }
     pub fn parse_txt(&self) -> Parsed<Term> {
@@ -122,7 +122,7 @@ impl Parser<'_> {
         let lo = self.src_idx(self.current_token.span.lo);
         let hi = self.src_idx(self.current_token.span.hi);
         // @TODO use get_unchecked instead?
-        match self.src.get(lo + 1..hi - 1).map(String::from) {
+        match self.src.get(lo + 1..hi).map(String::from) {
             Some(s) => s,
             None => String::from(""),
         }

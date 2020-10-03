@@ -178,6 +178,11 @@ impl From<usize> for Pos {
         Pos(p as u64)
     }
 }
+impl From<i32> for Pos {
+    fn from(p: i32) -> Pos {
+        Pos(p as u64)
+    }
+}
 impl Pos {
     pub fn as_usize(&self) -> usize {
         self.0 as usize
@@ -329,6 +334,15 @@ impl<T> Spanned<T> {
         Spanned {
             node: node,
             span: Span { lo: lo, hi: hi },
+        }
+    }
+    pub fn new_lit(node: T, lo: impl Into<Pos>, hi: impl Into<Pos>) -> Self {
+        Spanned {
+            node: node,
+            span: Span {
+                lo: lo.into(),
+                hi: hi.into(),
+            },
         }
     }
 }

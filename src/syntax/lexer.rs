@@ -18,22 +18,25 @@ use core::str::Chars;
 use crate::error::Handler;
 use crate::sourcemap::{span, Pos, Spanned};
 use crate::syntax;
-use crate::utils::*;
 
 /// parser error
 type PError = syntax::Error;
 pub struct Lexer<'a> {
     /// error handling
     pub handler: &'a mut Handler,
-    pub src: Chars<'a>,
-    /// current position in the reader
-    pub pos: Pos,
-    /// number of Open dimension delimiters
-    pub nest: usize, // @NOTE usize is probably overkill
-    /// @TODO get rid of this field and use peek instead, Chars.clone() doesn't clone the underlying source
+    src: Chars<'a>,
+    /// current position in reader (index of `current`)
+    pos: Pos,
+    /// next token = peek0
     next: Option<char>,
+    /// current token
     current: Option<char>,
+    /// number of Open dimension delimiters
+    nest: usize, // @NOTE usize is probably overkill
+    /// position of escaped chars
+    escapes: Vec<Pos>,
 
+    /// @REFACTOR
     failure: bool,
 }
 
@@ -54,6 +57,7 @@ impl<'a> Lexer<'a> {
             handler: h,
             current: None,
             next: None,
+            escapes: Vec::new(),
             failure: false,
         };
         l.current = l.src.next();
@@ -91,6 +95,7 @@ impl<'a> Lexer<'a> {
             None => return Spanned::new(EOF, start, self.pos),
             Some('\\') => match self.peek0() {
                 '#' | '}' => {
+                    self.escapes.push(self.pos);
                     self.bump(); // eat '\'
                     self.bump(); // eat escaped char
                     return self.next_token();
@@ -126,16 +131,16 @@ impl<'a> Lexer<'a> {
                 '#' => match self.peek0() {
                     '#' => {
                         if self.nest > 0 {
-                            return self.lex_txt(start, self.pos - 1);
+                            return self.lex_txt(start);
                         }
                     }
-                    '$' => return self.lex_txt(start, self.pos - 1),
-                    c if Self::is_varstart(c) => return self.lex_txt(start, self.pos - 1), // can we avoid this
+                    '$' => return self.lex_txt(start),
+                    c if Self::is_varstart(c) => return self.lex_txt(start), // can we avoid this
                     _ => continue,
                 },
                 '}' => {
                     if self.peek0() == '#' {
-                        return self.lex_txt(start, self.pos - 1);
+                        return self.lex_txt(start);
                     }
                 }
                 '\\' => {
@@ -146,7 +151,7 @@ impl<'a> Lexer<'a> {
             }
         }
         if start != self.pos {
-            self.lex_txt(start, self.pos)
+            self.lex_txt(start)
         } else {
             Spanned::new(EOF, start, self.pos)
         }
@@ -158,8 +163,9 @@ impl<'a> Lexer<'a> {
     pub fn is_varsymbol(c: char) -> bool {
         c.is_alphanumeric() || VAR_SYMS.contains(&c)
     }
-    pub fn lex_txt(&self, start: Pos, end: Pos) -> Token {
-        Token::new(Text, start, end)
+    /// Makes a [`Token::Text`] from `start` to `self.pos - 1`
+    pub fn lex_txt(&self, start: Pos) -> Token {
+        Token::new(Text, start, self.pos - 1)
     }
     pub fn lex_var(&mut self, start: Pos) -> Token {
         let mut err = false;
@@ -171,7 +177,7 @@ impl<'a> Lexer<'a> {
                 continue;
             } else if c == '#' {
                 self.bump(); // eat it
-                return Token::new(Var, start, self.pos);
+                return Token::new(Var, start, self.pos - 1);
             } else if c.is_whitespace() {
                 self.handler
                     .error("Non-terminated variable. Expected `#`, Found whitespace instead.")
@@ -201,7 +207,7 @@ impl<'a> Lexer<'a> {
         self.failure = true;
         // aborting here should be necessary because we're already at the end of the stream.
         // but dunno of a clean way
-        Token::new(Var, start, self.pos)
+        Token::new(Var, start, self.pos - 1)
     }
     pub fn lex_opend_maybe(&mut self, start: Pos) -> Option<Token> {
         // eat opening '#'
@@ -212,7 +218,7 @@ impl<'a> Lexer<'a> {
             } else if c == '{' {
                 self.bump(); // eat '{'
                 self.nest += 1;
-                return Some(Token::new(Opend, start, self.pos));
+                return Some(Token::new(Opend, start, self.pos - 1));
             } else {
                 return None;
             }
@@ -226,12 +232,12 @@ impl<'a> Lexer<'a> {
         self.bump(); // eat '}'
         self.bump(); // eat '#'
         self.nest = std::cmp::max(self.nest, 1) - 1;
-        Token::new(Closed, start, self.pos)
+        Token::new(Closed, start, self.pos - 1)
     }
     pub fn lex_sepd(&mut self, start: Pos) -> Token {
         self.bump(); // eat the '#'
         self.bump(); // eat the '#'
-        Token::new(Sepd, start, self.pos)
+        Token::new(Sepd, start, self.pos - 1)
     }
 
     fn identifier_note() -> String {
