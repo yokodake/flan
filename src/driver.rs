@@ -2,10 +2,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::iter::FromIterator;
 
-use crate::codemap::SrcFile;
 use crate::env::{Dim, Env};
 use crate::error::Handler;
 use crate::opt_parse::Index;
+use crate::sourcemap::SrcFile;
 use crate::syntax::{Lexer, Parser, TokenStream};
 
 pub fn make_env(
@@ -102,7 +102,7 @@ pub fn maybe_idx<'a>(i: Option<&'a Index>, choices: &'a Vec<String>) -> Option<(
 
 /// transform a source into a [`TokenStream`]
 pub fn source_to_stream(h: &mut Handler, src: &str) -> Option<TokenStream> {
-    use crate::codemap::Pos;
+    use crate::sourcemap::Pos;
     // @REFACTOR
     let mut vd = VecDeque::new();
     let mut lexer = Lexer::new(h, src, Pos::from(0 as usize));
@@ -120,12 +120,12 @@ pub fn source_to_stream(h: &mut Handler, src: &str) -> Option<TokenStream> {
 }
 
 pub fn string_to_parser<'a>(h: &'a mut Handler, str: String) -> Option<Parser<'a>> {
-    use crate::codemap::Pos;
+    use crate::sourcemap::Pos;
     source_to_stream(h, str.as_ref()).map(move |ts| Parser::new(h, str, ts, Pos::from(0 as usize)))
 }
 
 pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> io::Result<Parser<'a>> {
-    use crate::codemap::SourceInfo;
+    use crate::sourcemap::SourceInfo;
     use std::io::{Error, ErrorKind};
     match &source.src {
         SourceInfo::Binary => {

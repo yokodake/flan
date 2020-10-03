@@ -2,7 +2,7 @@
 //!
 //! @DESIGN The goal is that if an error occurs we continue parsing the rest of the files
 //! but I'm stil not sure whether copying should continue, stop or a rollback should occur.
-use crate::codemap::Span;
+use crate::sourcemap::Span;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Debug, Hash)]
 pub struct Error {

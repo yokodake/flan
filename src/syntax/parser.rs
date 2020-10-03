@@ -17,8 +17,8 @@
 //! be interresting to have variables names of paths to contain slashes for example.
 use std::collections::VecDeque;
 
-use crate::codemap::{Pos, Span, Spanned};
 use crate::error::Handler;
+use crate::sourcemap::{Pos, Span, Spanned};
 use crate::syntax::lexer::{Token, TokenK};
 use crate::syntax::Error;
 

@@ -1,9 +1,9 @@
 // variable and dimension names not parsed correctly
 
-use flan::codemap::Spanned;
 use flan::driver::source_to_stream;
 use flan::driver::string_to_parser;
 use flan::error::{ErrorFlags, Handler};
+use flan::sourcemap::Spanned;
 use flan::syntax::lexer::TokenK;
 use flan::syntax::{TermK, Terms, TokenStream};
 

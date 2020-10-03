@@ -16,8 +16,8 @@ pub use errors::Error;
 // imports
 use std::collections::HashMap;
 
-use crate::codemap::{Span, Spanned};
 use crate::error::Handler;
+use crate::sourcemap::{Span, Spanned};
 use crate::syntax::{Name, TermK, Terms};
 
 /// typecheck and infer (by mutating `env`) choices and dimensions.

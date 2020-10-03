@@ -1,5 +1,5 @@
-use flan::codemap::Spanned;
 use flan::error::{ErrorFlags, Handler};
+use flan::sourcemap::Spanned;
 use flan::syntax::lexer::TokenK;
 use flan::syntax::{Parsed, TermK, Terms};
 

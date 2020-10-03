@@ -19,4 +19,4 @@ pub mod syntax;
 
 pub mod utils;
 #[doc(inline)]
-pub use utils::codemap;
+pub use utils::sourcemap;

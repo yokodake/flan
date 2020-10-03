@@ -1,4 +1,5 @@
-pub mod codemap;
+pub mod source_analysis;
+pub mod sourcemap;
 
 /// a strict version of haskell's [sequence](https://hackage.haskell.org/package/base-4.12.0.0/docs/src/Data.Traversable.html#sequence)
 pub trait Sequenceable<T> {

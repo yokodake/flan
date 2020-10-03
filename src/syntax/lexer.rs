@@ -16,12 +16,9 @@
 use core::str::Chars;
 
 use crate::error::Handler;
+use crate::sourcemap::{span, Pos, Spanned};
 use crate::syntax;
 use crate::utils::*;
-use crate::{
-    codemap::{span, Pos, Spanned},
-    debug,
-};
 
 /// parser error
 type PError = syntax::Error;
@@ -92,8 +89,8 @@ impl<'a> Lexer<'a> {
         let start = self.pos;
         match self.current {
             None => return Spanned::new(EOF, start, self.pos),
-            Some('\\') => match self.next {
-                Some('#') | Some('}') => {
+            Some('\\') => match self.peek0() {
+                '#' | '}' => {
                     self.bump(); // eat '\'
                     self.bump(); // eat escaped char
                     return self.next_token();
@@ -101,14 +98,14 @@ impl<'a> Lexer<'a> {
                 _ => {}
             },
             // eat the '#' to avoid double `self.bump` in helper functions?
-            Some('#') => match self.next {
-                Some('#') => {
+            Some('#') => match self.peek0() {
+                '#' => {
                     if self.nest > 0 {
                         return self.lex_sepd(start);
                     }
                 }
-                Some('$') => return self.lex_var(start),
-                Some(c) if Self::is_varstart(c) => {
+                '$' => return self.lex_var(start),
+                c if Self::is_varstart(c) => {
                     if let Some(opend) = self.lex_opend_maybe(start) {
                         return opend;
                     }

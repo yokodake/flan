@@ -1,8 +1,8 @@
 // variable and dimension names not parsed correctly
 
-use flan::codemap::Spanned;
 use flan::driver::string_to_parser;
 use flan::error::{ErrorFlags, Handler};
+use flan::sourcemap::Spanned;
 use flan::syntax::{TermK, Terms};
 
 #[derive(Clone, PartialEq, Debug)]
