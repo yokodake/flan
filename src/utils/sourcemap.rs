@@ -29,12 +29,13 @@ pub struct File {
     pub end: Pos,
 }
 impl File {
-    /// @TODO
-    pub fn new(name: String) -> File {
+    /// panics if not a file name
+    pub fn new(path: PathBuf) -> File {
+        let name = path.file_name().unwrap().to_string_lossy().into();
         File {
             name,
-            path: PathBuf::from(""),
-            destination: PathBuf::from(""),
+            path: path,
+            destination: PathBuf::from(""), // @TODO
             src: SourceInfo::Src(String::from("")),
             lines: Vec::new(),
             start: Pos(0),

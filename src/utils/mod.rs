@@ -1,3 +1,4 @@
+pub mod path;
 pub mod source_analysis;
 pub mod sourcemap;
 

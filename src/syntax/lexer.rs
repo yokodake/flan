@@ -8,8 +8,8 @@
 //!
 //! For now, there are two escapes (`\#` and `\\`), separators (`##`) need not to be escaped *outside* of dimensions.
 //!
-//! @TODO whitespace escape
-//! @TODO escape first whitespace after `#..{`, before `}#` and around `##`.
+//! @TODO whitespace escape  
+//! @TODO escape first whitespace after `#..{`, before `}#` and around `##`.  
 //! @TODO allow newline escapes inside dimensions
 
 #![allow(dead_code)]
@@ -163,7 +163,7 @@ impl<'a> Lexer<'a> {
     pub fn is_varsymbol(c: char) -> bool {
         c.is_alphanumeric() || VAR_SYMS.contains(&c)
     }
-    /// Makes a [`Token::Text`] from `start` to `self.pos - 1`
+    /// Makes a [`TokenK::Text`] from `start` to `self.pos - 1`
     pub fn lex_txt(&self, start: Pos) -> Token {
         Token::new(Text, start, self.pos - 1)
     }
