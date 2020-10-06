@@ -27,6 +27,6 @@ impl<T, E> Sequenceable<T> for Result<T, E> {
 
 #[macro_export]
 macro_rules! debug {
-    () => (println!("@DEBUG"));
-    ($($arg:tt)*) => (println!("DEBUG: {}", format_args!($($arg)*)));
+    () => {#[cfg(debug_assertions)] println!("@DEBUG")};
+    ($($arg:tt)*) => {#[cfg(debug_assertions)] println!("DEBUG: {}", format_args!($($arg)*))};
 }
