@@ -7,6 +7,7 @@ pub enum Error {
     UnclosedDelimiter,
     UnexpectedEOF,
     FatalError,
+    LexerError,
 }
 
 impl Error {

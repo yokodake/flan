@@ -63,23 +63,19 @@ fn dummy(opt: &Opt) {
             hp.abort();
         }
         Ok(f) => match file_to_parser(&mut hp, f.clone()) {
-            Err(e) => {
-                hp.print_all();
-                eprintln!("{}", e);
+            Err(_) => {
                 hp.abort();
             }
             Ok(mut p) => {
-                let mut hi = Handler::new(flags, map);
-                match p.parse().map(|tree| infer::check(&tree, &mut env, &mut hi)) {
-                    Err(e) => {
-                        eprint!("{:#?}", e);
+                match p.parse().map(|tree| infer::check(&tree, &mut env, &mut hp)) {
+                    Err(_) => {
                         hp.abort();
                     }
                     Ok(None) => {
                         eprintln!("Type Checking failure.");
-                        hi.abort();
+                        hp.abort();
                     }
-                    Ok(Some(_)) => println!("succes."),
+                    Ok(Some(_)) => println!("success."),
                 };
             }
         },

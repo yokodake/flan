@@ -210,8 +210,7 @@ impl Default for ErrorFlags {
 /// an error handler
 pub struct Handler {
     pub flags: ErrorFlags,
-    /// @TODO simple error count instead?
-    pub printed_err: Vec<Error>,
+    pub err_count: usize,
     /// errors than haven't been printed yet, these should be emitted
     /// if we abort (e.g. with a fatal error)
     pub delayed_err: Vec<Error>,
@@ -222,16 +221,21 @@ impl Handler {
     pub fn new(flags: ErrorFlags, sources: Arc<SrcMap>) -> Self {
         Handler {
             flags,
-            printed_err: Vec::new(),
+            err_count: 0,
             delayed_err: Vec::new(),
             sources,
         }
     }
+    /// prints delayed errors and [`Self::abort_now`]
     pub fn abort(&mut self) -> ! {
         self.print_all();
-        if self.printed_err.len() > 1 {
-            eprintln!("Aborting due to previous error.");
-        } else if self.printed_err.len() == 1 {
+        self.abort_now()
+    }
+    /// aborts without printing delayed errors
+    pub fn abort_now(&mut self) -> ! {
+        if self.err_count > 1 {
+            eprintln!("Aborting due to previous errors.");
+        } else if self.err_count == 1 {
             eprintln!("Aborting due to previous error.");
         } else {
             eprintln!("Aborting.");
@@ -244,17 +248,18 @@ impl Handler {
     }
     /// prints all the delayed errors
     pub fn print_all(&mut self) {
-        // FIXME pop instead
         while let Some(e) = self.delayed_err.pop() {
-            Self::print_explicit(&self.flags, &mut self.printed_err, &self.sources, e);
+            Self::print_explicit(&self.flags, &self.sources, e);
         }
     }
     /// delay error reporting for later
     pub fn delay(&mut self, err: Error) {
+        self.err_count += 1;
         self.delayed_err.push(err);
     }
     pub fn print(&mut self, err: Error) {
-        Self::print_explicit(&self.flags, &mut self.printed_err, &self.sources, err)
+        self.err_count += 1;
+        Self::print_explicit(&self.flags, &self.sources, err)
     }
     /// exists in order to avoid code duplication between `print` and `print_all` due to
     /// mutable borrow conflicts of `self`, despite borrowing two different fields
@@ -263,12 +268,11 @@ impl Handler {
     ///   self.print(e) // mutable borrow
     /// }
     /// ```
-    fn print_explicit(flags: &ErrorFlags, printed: &mut Vec<Error>, sources: &SrcMap, err: Error) {
+    fn print_explicit(flags: &ErrorFlags, sources: &SrcMap, err: Error) {
         // @FIXME better error formatting with source files
         if flags.report_level >= err.levelu8() {
             println!("{}", err.render(sources.lookup_source(err.span.lo)));
         }
-        printed.push(err);
     }
     pub fn error<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
         ErrorBuilder {
@@ -277,13 +281,6 @@ impl Handler {
             messages: vec![String::from(msg)],
             span: None,
         }
-    }
-    pub fn find(&self, p: &impl Pattern<Level>) -> Option<&Error> {
-        self.printed_err
-            .iter()
-            .find(|&e| p.found(&e.level))
-            // `.or_else` instead of `.or` for laziness
-            .or_else(|| self.delayed_err.iter().find(|&e| p.found(&e.level)))
     }
 }
 

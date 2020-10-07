@@ -184,7 +184,6 @@ impl<'a> Lexer<'a> {
                     .with_span(span(start, self.pos))
                     .note("Variables have the following syntax: `#$variable#`")
                     .print();
-                self.failure = true;
                 // return a wrong Var token, consumer of the TokenStream should check errors
                 return Token::new(Var, start, self.pos);
             } else if !err {

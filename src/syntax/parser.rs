@@ -51,7 +51,13 @@ impl Parser<'_> {
         p
     }
     pub fn parse(&mut self) -> Parsed<Terms> {
-        self.parse_terms()
+        self.parse_terms().and_then(|ts| {
+            if self.handler.err_count > 0 {
+                Err(Error::LexerError)
+            } else {
+                Ok(ts)
+            }
+        })
     }
     pub fn parse_terms(&mut self) -> Parsed<Terms> {
         let mut terms = Vec::new();
