@@ -8,7 +8,8 @@ pub struct Env {
     pub dimensions: HashMap<String, Dim>,
     // pub choices: HashSet<String>,
     // pub file_map: HashMap<PathBuf, PathBuf>,
-    // pub source_map: SrcFileMap
+    // @TODO
+    // pub source_map: SrcMap
 }
 
 impl Env {

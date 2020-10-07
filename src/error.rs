@@ -2,7 +2,12 @@
 //!
 //! @DESIGN The goal is that if an error occurs we continue parsing the rest of the files
 //! but I'm stil not sure whether copying should continue, stop or a rollback should occur.
-use crate::sourcemap::Span;
+use std::sync::Arc;
+
+use crate::{
+    debug,
+    sourcemap::{Span, SrcFile, SrcMap},
+};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Debug, Hash)]
 pub struct Error {
@@ -25,6 +30,20 @@ impl Level {
             Level::Fatal => true,
             _ => false,
         }
+    }
+}
+impl std::fmt::Display for Level {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Level::Fatal => "FATAL ERROR",
+                Level::Error => "error",
+                Level::Warning => "warning",
+                Level::Note => "note",
+            }
+        )
     }
 }
 
@@ -118,16 +137,41 @@ impl Error {
             Level::Note => 4,
         }
     }
+    pub fn render(&self, src: Option<SrcFile>) -> String {
+        // I don't think this is a problem with String
+        #![allow(unused_must_use)]
+        use std::fmt::Write;
+
+        let mut buf = format!("{}: {}\n", self.level, self.msg);
+        let mut alignment = 0;
+
+        debug!("err.span: {}", self.span);
+        if src.is_some() {
+            let src = src.unwrap();
+            let line_ = src.lookup_line(self.span.lo);
+            assert!(line_.is_some());
+            let (num, line) = line_.map(|(num, line)| (num.to_string(), line)).unwrap();
+            alignment = num.len() + 1;
+            writeln!(buf, "  {}:{}", src.path.display(), self.span);
+            writeln!(buf, "{}", Self::align_left("|", alignment));
+            writeln!(buf, "{} | {}", num, line);
+            // @TODO highlight span on line
+            writeln!(buf, "{}", Self::align_left("|", alignment));
+        }
+        for m in self.extra.iter() {
+            writeln!(buf, "{} {}", Self::align_left("*", alignment), m);
+        }
+        buf
+    }
+    fn align_left(txt: &str, size: usize) -> String {
+        let mut buf = String::with_capacity(size + txt.len());
+        buf.push_str(" ".repeat(size).as_ref());
+        buf.push_str(txt);
+        buf
+    }
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let i = match self.level {
-            Level::Fatal => "FATAL ERROR:",
-            Level::Error => "error:",
-            Level::Warning => "warning:",
-            Level::Note => "note:",
-        };
-        writeln!(f, "{} {}", i, self.msg)?;
         if self.span != Span::MEMPTY {
             writeln!(f, " > filename:line_n:offset {}", self.span)?
         }
@@ -166,19 +210,21 @@ impl Default for ErrorFlags {
 /// an error handler
 pub struct Handler {
     pub flags: ErrorFlags,
+    /// @TODO simple error count instead?
     pub printed_err: Vec<Error>,
     /// errors than haven't been printed yet, these should be emitted
     /// if we abort (e.g. with a fatal error)
     pub delayed_err: Vec<Error>,
-    // map : srcFileMap, // @TODO
+    pub sources: Arc<SrcMap>, // @TODO
 }
 
 impl Handler {
-    pub fn new(flags: ErrorFlags) -> Self {
+    pub fn new(flags: ErrorFlags, sources: Arc<SrcMap>) -> Self {
         Handler {
             flags,
             printed_err: Vec::new(),
             delayed_err: Vec::new(),
+            sources,
         }
     }
     pub fn abort(&mut self) -> ! {
@@ -200,7 +246,7 @@ impl Handler {
     pub fn print_all(&mut self) {
         // FIXME pop instead
         while let Some(e) = self.delayed_err.pop() {
-            Self::print_explicit(&self.flags, &mut self.printed_err, e);
+            Self::print_explicit(&self.flags, &mut self.printed_err, &self.sources, e);
         }
     }
     /// delay error reporting for later
@@ -208,7 +254,7 @@ impl Handler {
         self.delayed_err.push(err);
     }
     pub fn print(&mut self, err: Error) {
-        Self::print_explicit(&self.flags, &mut self.printed_err, err)
+        Self::print_explicit(&self.flags, &mut self.printed_err, &self.sources, err)
     }
     /// exists in order to avoid code duplication between `print` and `print_all` due to
     /// mutable borrow conflicts of `self`, despite borrowing two different fields
@@ -217,10 +263,10 @@ impl Handler {
     ///   self.print(e) // mutable borrow
     /// }
     /// ```
-    fn print_explicit(flags: &ErrorFlags, printed: &mut Vec<Error>, err: Error) {
+    fn print_explicit(flags: &ErrorFlags, printed: &mut Vec<Error>, sources: &SrcMap, err: Error) {
         // @FIXME better error formatting with source files
         if flags.report_level >= err.levelu8() {
-            eprintln!("{}", err);
+            println!("{}", err.render(sources.lookup_source(err.span.lo)));
         }
         printed.push(err);
     }

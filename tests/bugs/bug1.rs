@@ -2,6 +2,7 @@
 
 use flan::driver::source_to_stream;
 use flan::error::{ErrorFlags, Handler};
+use flan::sourcemap::SrcMap;
 use flan::syntax::lexer::TokenK;
 use flan::syntax::TokenStream;
 
@@ -16,7 +17,7 @@ fn expected() -> Vec<TokenK> {
 
 #[test]
 pub fn missing_txt() {
-    let mut h = Handler::new(ErrorFlags::default());
+    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
     let s = source_to_stream(&mut h, SRC);
     assert!(s.is_some());
     assert_eq!(expected(), get_kinds(s.unwrap()))

@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
+use flan::cfg::Config;
+use flan::debug;
 use flan::opt_parse::{Index, OptDec};
 
 fn main() {
@@ -15,10 +17,10 @@ fn main() {
 }
 
 fn dummy(opt: &Opt) {
-    use flan::codemap::SrcFileMap;
     use flan::driver::{file_to_parser, make_env};
     use flan::error::{ErrorFlags, Handler};
     use flan::infer;
+    use flan::sourcemap::SrcMap;
 
     let (n, ni);
     match opt.parse_decisions() {
@@ -44,34 +46,31 @@ fn dummy(opt: &Opt) {
         report_level: 5,
         warn_as_error: false,
     };
-    let mut hp = Handler::new(flags);
-
+    let map = SrcMap::new();
+    let mut hp = Handler::new(flags, map.clone());
     let mut env: infer::Env = match make_env(declared_vars, declared_dims, (n, ni)) {
         Some(e) => e,
         None => {
-            eprintln!("Aborting due to previous errors.");
+            eprintln!("Could not make environment");
             hp.abort()
         }
     };
-    let mut map = SrcFileMap::new();
+
     match map.load_file(&opt.file_in, &"".into()) {
         Err(e) => {
             hp.print_all();
             eprintln!("{}", e);
             hp.abort();
         }
-        Ok(f) => match file_to_parser(&mut hp, f) {
+        Ok(f) => match file_to_parser(&mut hp, f.clone()) {
             Err(e) => {
                 hp.print_all();
                 eprintln!("{}", e);
                 hp.abort();
             }
             Ok(mut p) => {
-                let mut hi = Handler::new(flags);
-                match p
-                    .parse()
-                    // .map(|tree| infer::check(&tree, &mut env, &mut hi))
-                {
+                let mut hi = Handler::new(flags, map);
+                match p.parse().map(|tree| infer::check(&tree, &mut env, &mut hi)) {
                     Err(e) => {
                         eprint!("{:#?}", e);
                         hp.abort();

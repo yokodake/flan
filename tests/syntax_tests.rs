@@ -1,5 +1,5 @@
 use flan::error::{ErrorFlags, Handler};
-use flan::sourcemap::Spanned;
+use flan::sourcemap::{Spanned, SrcMap};
 use flan::syntax::lexer::{Token, TokenK};
 use flan::syntax::{Parsed, TermK, Terms};
 
@@ -33,21 +33,21 @@ fn get_kinds(ts: Terms) -> Kinds {
 }
 fn parse_str(src: &str) -> Parsed<Terms> {
     use flan::driver::string_to_parser;
-    let mut h = Handler::new(ErrorFlags::default());
+    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
     let p = string_to_parser(&mut h, src.into());
     assert!(p.is_some());
     p.unwrap().parse()
 }
 fn lex_str(src: &str) -> Vec<TokenK> {
     use flan::driver::source_to_stream;
-    let mut h = Handler::new(ErrorFlags::default());
+    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
     let s = source_to_stream(&mut h, src);
     assert!(s.is_some());
     s.unwrap().iter().map(|t| t.node).collect()
 }
 fn stream_str(src: &str) -> Vec<Token> {
     use flan::driver::source_to_stream;
-    let mut h = Handler::new(ErrorFlags::default());
+    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
     let s = source_to_stream(&mut h, src);
     assert!(s.is_some());
     let mut v = Vec::new();

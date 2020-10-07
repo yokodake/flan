@@ -1,11 +1,11 @@
 //! custom version of [https://docs.rs/codemap/](https://docs.rs/codemap/).
 
-use std::fs::read_to_string;
 use std::io;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+use std::{borrow::Cow, fs::read_to_string};
 
 #[derive(Hash, Debug, Clone, PartialEq)]
 /// Information about the Source
@@ -54,6 +54,39 @@ impl File {
             _ => false,
         }
     }
+    pub fn lookup_line(&self, pos: Pos) -> Option<(usize, Cow<'_, str>)> {
+        let i = self.get_line_num(pos)?;
+        let s = self.get_loc(i)?;
+        Some((i, s))
+    }
+    pub fn get_line_num(&self, pos: Pos) -> Option<usize> {
+        if self.lines.is_empty() {
+            return None;
+        }
+        let i = match self.lines.binary_search(&pos) {
+            Ok(i) => i,
+            Err(i) => i.saturating_sub(1),
+        };
+        assert!(i < self.lines.len());
+        Some(i)
+    }
+    pub fn get_loc(&self, line_num: usize) -> Option<Cow<'_, str>> {
+        let s = (*(self.lines.get(line_num)?) - self.start).as_usize();
+        if let SourceInfo::Src(src) = &self.src {
+            let lbeg = &src.as_str()[s..];
+            let loc = match src.as_str()[s..].find('\n') {
+                Some(e) => &lbeg[..e],
+                // until EOF
+                None => lbeg,
+            };
+            Some(Cow::from(loc))
+        } else {
+            None
+        }
+    }
+    pub fn contains(&self, span: Span) -> bool {
+        self.start <= span.lo && self.end >= span.hi
+    }
 }
 
 /// type synonym for easier refactoring
@@ -61,20 +94,20 @@ pub type SrcFile = Arc<File>;
 
 #[derive(Debug)]
 /// A map of source files. @NOTE Maybe shouldn't be a new type.
-pub struct SrcFileMap {
-    sources: Vec<SrcFile>,
+pub struct SrcMap {
+    pub sources: RwLock<Vec<SrcFile>>,
     start: AtomicU64,
 }
 
-impl SrcFileMap {
-    pub fn new() -> Self {
-        SrcFileMap {
-            sources: Vec::new(),
+impl SrcMap {
+    pub fn new() -> Arc<Self> {
+        Arc::new(SrcMap {
+            sources: RwLock::new(Vec::new()),
             start: AtomicU64::new(0),
-        }
+        })
     }
     /// load a file and add it to the map
-    pub fn load_file(&mut self, path: &PathBuf, dest: &PathBuf) -> io::Result<SrcFile> {
+    pub fn load_file(&self, path: &PathBuf, dest: &PathBuf) -> io::Result<SrcFile> {
         let mut file = Self::path_to_file(path, dest)?;
         let start = self.bump_start(file.end.0);
         file.start = Pos(start);
@@ -83,7 +116,7 @@ impl SrcFileMap {
             *p += file.start;
         }
         let af = Arc::new(file);
-        self.sources.push(af.clone());
+        self.sources.write().unwrap().push(af.clone());
         Ok(af)
     }
     /// helper that builds a [`File`] from a path
@@ -146,6 +179,8 @@ impl SrcFileMap {
         // @SPEED treshold for linear search
         use std::cmp::Ordering;
         self.sources
+            .read()
+            .unwrap()
             .binary_search_by(|s| {
                 if span.is_inbounds(s.start, s.end) {
                     return Ordering::Equal;
@@ -156,6 +191,15 @@ impl SrcFileMap {
                 }
             })
             .is_ok()
+    }
+    pub fn lookup_source(&self, pos: Pos) -> Option<SrcFile> {
+        // should we binary search instead? use a threshold?
+        for it in self.sources.read().unwrap().iter() {
+            if it.start <= pos {
+                return Some(it.clone());
+            }
+        }
+        None
     }
     fn bump_start(&self, size: u64) -> u64 {
         use std::sync::atomic::Ordering;
@@ -191,7 +235,7 @@ impl Pos {
 }
 impl std::fmt::Display for Pos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -319,7 +363,7 @@ impl Span {
 }
 impl std::fmt::Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "({}:{})", self.lo, self.hi)
+        write!(f, "{}:{}", self.lo, self.hi)
     }
 }
 

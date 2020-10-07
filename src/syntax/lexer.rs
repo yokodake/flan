@@ -182,7 +182,7 @@ impl<'a> Lexer<'a> {
                 self.handler
                     .error("Non-terminated variable. Expected `#`, Found whitespace instead.")
                     .with_span(span(start, self.pos))
-                    .note("Variables have the following syntax: #$variable#")
+                    .note("Variables have the following syntax: `#$variable#`")
                     .print();
                 self.failure = true;
                 // return a wrong Var token, consumer of the TokenStream should check errors
@@ -202,7 +202,7 @@ impl<'a> Lexer<'a> {
         self.handler
             .error("Non-terminated variable, expected `#`.")
             .with_span(span(start, self.pos))
-            .note("Variables have the following syntax: #$variable#")
+            .note("Variables have the following syntax: `#$variable#`")
             .print();
         self.failure = true;
         // aborting here should be necessary because we're already at the end of the stream.

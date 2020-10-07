@@ -2,7 +2,7 @@
 
 use flan::driver::string_to_parser;
 use flan::error::{ErrorFlags, Handler};
-use flan::sourcemap::Spanned;
+use flan::sourcemap::{Spanned, SrcMap};
 use flan::syntax::{TermK, Terms};
 
 #[derive(Clone, PartialEq, Debug)]
@@ -28,7 +28,7 @@ fn expected() -> Vec<Names> {
 
 #[test]
 pub fn names() {
-    let mut h = Handler::new(ErrorFlags::default());
+    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
     let p = string_to_parser(&mut h, SRC.into());
     assert!(p.is_some());
     let tree = p.unwrap().parse();

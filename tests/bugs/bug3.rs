@@ -3,7 +3,7 @@
 use flan::driver::source_to_stream;
 use flan::driver::string_to_parser;
 use flan::error::{ErrorFlags, Handler};
-use flan::sourcemap::Spanned;
+use flan::sourcemap::{Spanned, SrcMap};
 use flan::syntax::lexer::TokenK;
 use flan::syntax::{TermK, Terms, TokenStream};
 
@@ -59,7 +59,7 @@ fn expected_terms() -> Vec<Kind> {
 
 #[test]
 pub fn nesting_parsing() {
-    let mut h = Handler::new(ErrorFlags::default());
+    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
     let p = string_to_parser(&mut h, SRC.into());
     assert!(p.is_some());
     let terms = p.unwrap().parse();
@@ -73,7 +73,7 @@ pub fn nesting_lexing() {
         report_level: 5,
         warn_as_error: false,
     };
-    let mut h = Handler::new(flags);
+    let mut h = Handler::new(flags, SrcMap::new());
     let s = source_to_stream(&mut h, SRC);
     assert!(s.is_some());
     assert_eq!(expected_tokens(), get_tokens(s.unwrap()))
