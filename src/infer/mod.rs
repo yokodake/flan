@@ -23,15 +23,14 @@ use crate::syntax::{Name, TermK, Terms};
 /// typecheck and infer (by mutating `env`) choices and dimensions.
 pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler) -> Option<()> {
     let mut errors = false;
-    for Spanned { node: t, span } in terms {
-        match t {
+    for term in terms {
+        match &term.node {
             TermK::Text => {}
             TermK::Var(name) => {
                 if !env.variables.contains_key(name) {
                     handler
                         .error(format!("Undeclared variable `{}`.", name).as_ref())
-                        .with_span(*span)
-                        // @FIXME .with_kind(Error::UnknownVariable)
+                        .with_span(term.span)
                         .print();
                     errors = true;
                 }
@@ -39,7 +38,7 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler) -> Option<()> 
             TermK::Dimension { name, children } => match env.dimensions.get_mut(name) {
                 Some(d) => {
                     if !d.try_set_dim(children.len() as i8) {
-                        error_size_conflict(handler, name, *span);
+                        error_size_conflict(handler, name, term.opend_span().unwrap());
                         errors = true;
                     }
                     for c in children {
@@ -49,8 +48,7 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler) -> Option<()> 
                 None => {
                     handler
                         .error(format!("Unknown dimension `{}`.", name).as_ref())
-                        .with_span(*span)
-                        // @FIXME .with_kind(Error::UnknownDecision) 
+                        .with_span(term.opend_span().unwrap())
                         .note("Decision inference is not supported yet. This dimensions requires a decision given explicitly.")
                         .note("Postponed dimension declaration (in source files) is not supported yet.")
                         .print();
@@ -66,7 +64,7 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler) -> Option<()> 
     }
 }
 
-/// returns all the dimensions and their size used & report conflicts
+/// returns all the dimensions used and their size & report conflicts
 /// @TODO merge with [`check`] ?
 pub fn collect<'a>(
     terms: &Terms,

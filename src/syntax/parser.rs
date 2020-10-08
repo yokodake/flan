@@ -209,6 +209,29 @@ impl Term {
             span,
         }
     }
+    pub fn name_span(&self) -> Option<Span> {
+        match &self.node {
+            TermK::Text => None,
+            TermK::Var(name) => {
+                let s = self.span.subspan(2, name.len() as u64 - 1);
+                assert_eq!(s.len(), name.len());
+                Some(s)
+            }
+            TermK::Dimension { name, .. } => {
+                let s = self.span.subspan(1, name.len() as u64 - 2);
+                Some(s)
+            }
+        }
+    }
+    pub fn opend_span(&self) -> Option<Span> {
+        match &self.node {
+            TermK::Dimension { name, .. } => {
+                let s = self.span.subspan(0, name.len() as u64 - 1);
+                Some(s)
+            }
+            _ => None,
+        }
+    }
 }
 /// the kind of a Term
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
