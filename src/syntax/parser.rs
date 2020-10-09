@@ -209,6 +209,11 @@ impl Term {
             span,
         }
     }
+    /// returns the span of only the name of a variable or dimension
+    /// ```c++
+    /// #$foobar#   #dimension{
+    ///   ^^^^^^     ^^^^^^^^^
+    /// ```
     pub fn name_span(&self) -> Option<Span> {
         match &self.node {
             TermK::Text => None,
@@ -218,7 +223,7 @@ impl Term {
                 Some(s)
             }
             TermK::Dimension { name, .. } => {
-                let s = self.span.subspan(1, name.len() as u64 - 2);
+                let s = self.span.subspan(1, name.len() as u64);
                 Some(s)
             }
         }
@@ -226,7 +231,7 @@ impl Term {
     pub fn opend_span(&self) -> Option<Span> {
         match &self.node {
             TermK::Dimension { name, .. } => {
-                let s = self.span.subspan(0, name.len() as u64 - 1);
+                let s = self.span.subspan(0, name.len() as u64 + 1);
                 Some(s)
             }
             _ => None,

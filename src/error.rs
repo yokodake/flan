@@ -13,8 +13,12 @@ use crate::{
 pub struct Error {
     level: Level,
     msg: String,
+    /// error location
     span: Span,
+    /// extra error messages
     extra: Vec<String>,
+    /// message right under the error location
+    at_span: String,
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Debug, Hash)]
@@ -53,75 +57,52 @@ impl Error {
     }
     /// a general error without any specific location
     pub fn error_general(msg: String) -> Self {
-        Error {
-            level: Level::Error,
-            msg: msg,
-            span: Span::MEMPTY,
-            extra: Vec::new(),
-        }
+        Self::with_msg_span(Level::Error, msg, Span::MEMPTY)
     }
     pub fn error(span: Span, msg: String) -> Self {
-        Error {
-            level: Level::Error,
-            msg: msg,
-            span: span,
-            extra: Vec::new(),
-        }
+        Self::with_msg_span(Level::Error, msg, span)
     }
     pub fn warn_general(msg: String) -> Self {
-        Error {
-            level: Level::Warning,
-            msg: msg,
-            span: Span::MEMPTY,
-            extra: Vec::new(),
-        }
+        Self::with_msg_span(Level::Warning, msg, Span::MEMPTY)
     }
     pub fn warn(span: Span, msg: String) -> Self {
-        Error {
-            level: Level::Warning,
-            msg: msg,
-            span: span,
-            extra: Vec::new(),
-        }
+        Self::with_msg_span(Level::Warning, msg, span)
     }
     pub fn note_general(msg: String) -> Self {
-        Error {
-            level: Level::Note,
-            msg: msg,
-            span: Span::MEMPTY,
-            extra: Vec::new(),
-        }
+        Self::with_msg_span(Level::Note, msg, Span::MEMPTY)
     }
     pub fn note(span: Span, msg: String) -> Self {
-        Error {
-            level: Level::Note,
-            msg: msg,
-            span: span,
-            extra: Vec::new(),
-        }
+        Self::with_msg_span(Level::Note, msg, span)
     }
     pub fn fatal_unexpected() -> Self {
-        Error {
-            level: Level::Fatal,
-            msg: String::from("Unexpected fatal error."),
-            span: Span::MEMPTY,
-            extra: Vec::new(),
-        }
+        Self::with_msg_span(
+            Level::Fatal,
+            String::from("Unexpected fatal error."),
+            Span::MEMPTY,
+        )
     }
     pub fn fatal_span(msg: String, span: Span) -> Self {
+        Self::with_msg_span(Level::Fatal, msg, span)
+    }
+    pub fn fatal(msg: String) -> Self {
+        Self::with_msg_span(Level::Fatal, msg, Span::MEMPTY)
+    }
+    fn with_level(level: Level) -> Self {
         Error {
-            level: Level::Fatal,
+            level,
+            msg: String::from(""),
+            span: Span::MEMPTY,
+            extra: Vec::new(),
+            at_span: String::from(""),
+        }
+    }
+    fn with_msg_span(level: Level, msg: String, span: Span) -> Self {
+        Error {
+            level,
             msg,
             span,
             extra: Vec::new(),
-        }
-    }
-    pub fn fatal(msg: String) -> Self {
-        Error {
-            level: Level::Fatal,
-            msg: msg,
-            span: Span::MEMPTY,
-            extra: Vec::new(),
+            at_span: String::from(""),
         }
     }
     /// add extra messages
@@ -150,12 +131,24 @@ impl Error {
             let src = src.unwrap();
             let line_ = src.lookup_line(self.span.lo);
             assert!(line_.is_some());
-            let (num, line) = line_.map(|(num, line)| (num.to_string(), line)).unwrap();
-            alignment = num.len() + 1;
-            writeln!(buf, "  {}:{}", src.path.display(), self.span);
+            let (lnum, line, lspan) = line_
+                .map(|loc| ((loc.index + 1).to_string(), loc.line, loc.span))
+                .unwrap();
+            let rel_span = self.span.correct(lspan.lo);
+
+            alignment = lnum.len() + 1;
+            writeln!(buf, "  {}:{}:{}", src.path.display(), lnum, rel_span.lo + 1);
+
             writeln!(buf, "{}", Self::align_left("|", alignment));
-            writeln!(buf, "{} | {}", num, line);
-            // @TODO highlight span on line
+
+            writeln!(buf, "{} | {}", lnum, line);
+
+            // highlight span
+            write!(buf, "{} ", Self::align_left("|", alignment));
+            write!(buf, "{}", Self::align_left("", rel_span.lo.as_usize()));
+            write!(buf, "{}", "^".repeat(rel_span.len()));
+            writeln!(buf, " {}", self.at_span);
+
             writeln!(buf, "{}", Self::align_left("|", alignment));
         }
         for m in self.extra.iter() {
@@ -285,6 +278,7 @@ impl Handler {
             level: Level::Error,
             messages: vec![String::from(msg)],
             span: None,
+            at_span: None,
         }
     }
 }
@@ -313,6 +307,7 @@ pub struct ErrorBuilder<'a> {
     /// `messages[0] = Error::message`, the rest are extras
     pub messages: Vec<String>,
     pub span: Option<Span>,
+    pub at_span: Option<String>,
 }
 
 impl<'a> ErrorBuilder<'a> {
@@ -329,6 +324,11 @@ impl<'a> ErrorBuilder<'a> {
     /// should we refine or enlarge the span if they're different?
     pub fn with_span(mut self, span: Span) -> Self {
         self.span = Some(span);
+        self
+    }
+    /// adds a message under the error location
+    pub fn at_span(mut self, msg: String) -> Self {
+        self.at_span = Some(msg);
         self
     }
     /// consumes the builder and prints an error
@@ -352,6 +352,7 @@ impl<'a> ErrorBuilder<'a> {
         }
         self.messages.push(msg);
     }
+    // FIXME consume the builder
     fn mk_error(&mut self) -> Error {
         let mut messages = Vec::new();
         std::mem::swap(&mut messages, &mut self.messages);
@@ -360,11 +361,14 @@ impl<'a> ErrorBuilder<'a> {
             1 => messages.pop().unwrap(),
             _ => messages.swap_remove(0),
         };
+
         Error {
             level: self.level,
             msg: m,
             extra: messages,
             span: self.span.unwrap_or(Span::MEMPTY),
+            // @FIXME
+            at_span: self.at_span.clone().unwrap_or(String::from("")),
         }
     }
 }

@@ -135,11 +135,23 @@ impl Span {
     }
     /// computes length of the span
     pub fn len(&self) -> usize {
-        (self.hi.0 - self.lo.0) as usize
+        (self.hi.0 - self.lo.0 + 1) as usize
     }
     /// merges two spans, same as `+` operator
     pub fn merge(self, other: Span) -> Span {
         self + other
+    }
+    /// removes the offset
+    pub fn correct(&self, offset: Pos) -> Span {
+        assert!(offset <= self.lo);
+        assert!(offset <= self.hi);
+        span(self.lo - offset, self.hi - offset)
+    }
+    pub fn lo_as_usize(&self) -> usize {
+        self.lo.0 as usize
+    }
+    pub fn hi_as_usize(&self) -> usize {
+        self.hi.0 as usize
     }
     /// identity for Span merging/addition
     #[allow(dead_code)]
@@ -147,13 +159,6 @@ impl Span {
         lo: Pos(std::u64::MAX),
         hi: Pos(std::u64::MIN),
     };
-
-    pub fn lo_as_usize(&self) -> usize {
-        self.lo.0 as usize
-    }
-    pub fn hi_as_usize(&self) -> usize {
-        self.hi.0 as usize
-    }
 }
 impl std::fmt::Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -49,7 +49,7 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler) -> Option<()> 
                     handler
                         .error(format!("Unknown dimension `{}`.", name).as_ref())
                         .with_span(term.opend_span().unwrap())
-                        .note("Decision inference is not supported yet. This dimensions requires a decision given explicitly.")
+                        .note("Decision inference is not supported yet. This dimension requires a decision given explicitly.")
                         .note("Postponed dimension declaration (in source files) is not supported yet.")
                         .print();
                     errors = true;
