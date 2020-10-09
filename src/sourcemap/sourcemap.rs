@@ -1,10 +1,12 @@
 //! Source file maps and Source files.
+use std::borrow::Cow;
+use std::fs::read_to_string;
 use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, RwLock};
-use std::{borrow::Cow, fs::read_to_string};
 
+use super::loc::Loc;
 use super::span::*;
 
 #[derive(Hash, Debug, Clone, PartialEq)]
@@ -23,7 +25,7 @@ pub struct File {
     pub destination: PathBuf,
     /// Source or its state
     pub src: SourceInfo,
-    /// start positions of lines
+    /// start positions of lines, **relative to [`Self::start`]!**
     pub lines: Vec<Pos>,
     pub start: Pos,
     pub end: Pos,
@@ -54,12 +56,23 @@ impl File {
             _ => false,
         }
     }
-    pub fn lookup_line(&self, pos: Pos) -> Option<(usize, Cow<'_, str>)> {
-        let i = self.get_line_num(pos)?;
-        let s = self.get_loc(i)?;
-        Some((i, s))
+    pub fn lookup_line(&self, pos: Pos) -> Option<Loc<'_>> {
+        use crate::sourcemap as sm;
+        let index = self.get_line_num(pos)?;
+        let line = self.get_loc(index)?;
+        let start = unsafe { self.lines.get_unchecked(index) };
+        let end: Pos = self
+            .lines
+            .get(index + 1)
+            .map(|p| p.clone() - 1)
+            .unwrap_or(self.end);
+        let span = sm::span(*start, end);
+        Some(Loc { index, span, line })
     }
+    /// gets the index of the line containing `pos`.
+    /// This is not a line number.
     pub fn get_line_num(&self, pos: Pos) -> Option<usize> {
+        let pos = pos - self.start;
         if self.lines.is_empty() {
             return None;
         }
@@ -70,6 +83,7 @@ impl File {
         assert!(i < self.lines.len());
         Some(i)
     }
+    /// gets the contents of the line of code from the source file.
     pub fn get_loc(&self, line_num: usize) -> Option<Cow<'_, str>> {
         let s = (*(self.lines.get(line_num)?) - self.start).as_usize();
         if let SourceInfo::Src(src) = &self.src {
@@ -112,9 +126,6 @@ impl SrcMap {
         let start = self.bump_start(file.end.0);
         file.start = Pos(start);
         file.end += file.start;
-        for p in file.lines.iter_mut() {
-            *p += file.start;
-        }
         let af = Arc::new(file);
         self.sources.write().unwrap().push(af.clone());
         Ok(af)
