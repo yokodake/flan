@@ -138,7 +138,7 @@ impl Error {
         }
     }
     pub fn render(&self, src: Option<SrcFile>) -> String {
-        // I don't think this is a problem with String
+        // @SAFETY: write does not fail on Strings
         #![allow(unused_must_use)]
         use std::fmt::Write;
 

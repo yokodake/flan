@@ -102,7 +102,7 @@ impl Parser<'_> {
     pub fn parse_var(&self) -> Parsed<Term> {
         let lo = self.src_idx(self.current_token.span.lo);
         let hi = self.src_idx(self.current_token.span.hi);
-        // SAFETY: span is guaranteed to be valid by lexer
+        // @SAFETY: span is guaranteed to be valid by lexer
         let name = unsafe { self.src.get_unchecked(lo + 2..hi) };
         Ok(Term::var(name.into(), self.current_token.span))
     }

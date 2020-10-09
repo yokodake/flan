@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::iter::FromIterator;
 
+use crate::cfg::Choices;
 use crate::env::{Dim, Env};
 use crate::error::Handler;
 use crate::infer;
@@ -50,6 +51,7 @@ pub fn make_env(
             }
             found.push(on);
         }
+        // @SAFETY: write! does not fail on Strings
         #[allow(unused_must_use)]
         if conflict || found.len() > 1 {
             // if conflicting decisions
@@ -147,18 +149,13 @@ pub fn collect_dims<'a>(
     terms: &Terms,
     h: &mut Handler,
     declared_dims: &HashMap<Name, Vec<Name>>,
-) -> Vec<(Name, Ch)> {
+) -> Vec<(Name, Choices)> {
     let mut map = HashMap::new();
     infer::collect(terms, h, &mut map);
     map.into_iter()
         .map(|(k, v)| match declared_dims.get(&k) {
-            Some(v) => (k, Ch::Named(v.clone())),
-            None => (k, Ch::Sized(v)),
+            Some(v) => (k, Choices::Names(v.clone())),
+            None => (k, Choices::Size(v)),
         })
         .collect()
-}
-
-pub enum Ch {
-    Named(Vec<String>),
-    Sized(u8),
 }

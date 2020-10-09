@@ -20,7 +20,7 @@ pub struct Config {
     /// variable declarations
     pub variables: Option<HashMap<String, String>>,
     /// dimension declarations
-    pub dimensions: Option<HashMap<String, DimDecl>>,
+    pub dimensions: Option<HashMap<String, Choices>>,
     /// source -> destination map
     pub paths: Option<HashMap<PathBuf, PathBuf>>,
 }
@@ -37,9 +37,9 @@ pub struct Options {
 /// Dimension Declarations.
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
-pub enum DimDecl {
+pub enum Choices {
     Size(u8),
-    Choices(Vec<String>),
+    Names(Vec<String>),
 }
 
 impl Config {
