@@ -68,11 +68,7 @@ pub fn nesting_parsing() {
 }
 #[test]
 pub fn nesting_lexing() {
-    let flags = ErrorFlags {
-        no_extra: false,
-        report_level: 5,
-        warn_as_error: false,
-    };
+    let flags = ErrorFlags::default();
     let mut h = Handler::new(flags, SrcMap::new());
     let s = source_to_stream(&mut h, SRC);
     assert!(s.is_some());

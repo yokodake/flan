@@ -1,15 +1,18 @@
+//! Inference/type checking environment.  
+//!
+//! Possible improvements:
+//! * Carry a hashset in the env of decisions left for delayed dimension declarations
+//! * add spans to [`Env::dimensions`] and [`Env::variables`] for better error reporting.
+//!   this might mean a span for every conflicting dimension call, as well as, a mechanism
+//!   to refine delayed_errors.
 use std::collections::HashMap;
 
-// @TODO use symbols
 #[derive(Clone, Debug)]
-/// typechecking/inference environment
+/// typechecking/inference environment  
+/// @TODO: use symbols?
 pub struct Env {
     pub variables: HashMap<String, String>,
     pub dimensions: HashMap<String, Dim>,
-    // pub choices: HashSet<String>,
-    // pub file_map: HashMap<PathBuf, PathBuf>,
-    // @TODO
-    // pub source_map: SrcMap
 }
 
 impl Env {
@@ -45,15 +48,16 @@ pub struct Dim {
 }
 
 impl Dim {
-    pub fn new(choice: u8) -> Self {
+    pub fn new(decision: u8) -> Self {
         Dim {
             choices: -1,
-            decision: choice,
+            decision,
         }
     }
     /// tries to set the number of choices a dimension holds, returns false if it failed:
     /// * if it was already set before to a diferent value
-    /// * if `n` is also negative
+    /// * if `n` is also negative  
+    /// @INCOMPLETE `self.decision > n`
     pub fn try_set_dim(&mut self, n: i8) -> bool {
         if self.choices != n && self.choices > 0 {
             false
@@ -64,6 +68,7 @@ impl Dim {
             true
         }
     }
+    /// Whether a dimension's size has already been inferred
     pub fn has_been_inferred(&self) -> bool {
         self.choices >= 0
     }

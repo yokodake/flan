@@ -4,9 +4,10 @@ use std::iter::FromIterator;
 
 use crate::env::{Dim, Env};
 use crate::error::Handler;
+use crate::infer;
 use crate::opt_parse::Index;
 use crate::sourcemap::SrcFile;
-use crate::syntax::{Lexer, Parser, TokenStream};
+use crate::syntax::{Lexer, Name, Parser, Terms, TokenStream};
 
 pub fn make_env(
     variables: Vec<(String, String)>,
@@ -49,6 +50,7 @@ pub fn make_env(
             }
             found.push(on);
         }
+        #[allow(unused_must_use)]
         if conflict || found.len() > 1 {
             // if conflicting decisions
             // @TODO use error handler instead.
@@ -139,4 +141,24 @@ pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> io::Result<Par
                 .ok_or_else(|| Error::new(ErrorKind::Other, "aborting due to previous errors"))?)
         }
     };
+}
+
+pub fn collect_dims<'a>(
+    terms: &Terms,
+    h: &mut Handler,
+    declared_dims: &HashMap<Name, Vec<Name>>,
+) -> Vec<(Name, Ch)> {
+    let mut map = HashMap::new();
+    infer::collect(terms, h, &mut map);
+    map.into_iter()
+        .map(|(k, v)| match declared_dims.get(&k) {
+            Some(v) => (k, Ch::Named(v.clone())),
+            None => (k, Ch::Sized(v)),
+        })
+        .collect()
+}
+
+pub enum Ch {
+    Named(Vec<String>),
+    Sized(u8),
 }

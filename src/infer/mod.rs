@@ -65,11 +65,11 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler) -> Option<()> 
 }
 
 /// returns all the dimensions used and their size & report conflicts
-/// @TODO merge with [`check`] ?
+/// @REFACTOR merge with [`check`] ?
 pub fn collect<'a>(
     terms: &Terms,
     handler: &mut Handler,
-    dims: &'a mut HashMap<String, u8>,
+    dims: &'a mut HashMap<Name, u8>,
 ) -> &'a mut HashMap<Name, u8> {
     for Spanned { node, span } in terms {
         match node {

@@ -45,6 +45,7 @@ fn dummy(opt: &Opt) {
         no_extra: false,
         report_level: 5,
         warn_as_error: false,
+        dry_run: false,
     };
     let map = SrcMap::new();
     let mut hp = Handler::new(flags, map.clone());
