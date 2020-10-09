@@ -11,3 +11,5 @@ pub use lexer::Lexer;
 pub use parser::{Name, Term, TermK, Terms};
 #[doc(inline)]
 pub use parser::{Parsed, Parser, TokenStream};
+
+pub use crate::sourcemap::Spanned;

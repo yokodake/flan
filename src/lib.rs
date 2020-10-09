@@ -2,6 +2,7 @@
 #![feature(int_error_matching)]
 #![feature(type_ascription)]
 #![feature(try_trait)]
+#![feature(new_uninit)]
 
 pub mod cfg;
 #[doc(inline)]
@@ -18,5 +19,5 @@ pub use infer::env;
 pub mod syntax;
 
 pub mod utils;
-#[doc(inline)]
-pub use utils::sourcemap;
+
+pub mod sourcemap;

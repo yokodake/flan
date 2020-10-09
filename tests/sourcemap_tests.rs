@@ -1,6 +1,6 @@
 #![allow(non_upper_case_globals)]
+use flan::sourcemap::source_analysis;
 use flan::sourcemap::Pos;
-use flan::utils::source_analysis;
 
 static no_nl_128: &str = "aaaabbbbccccddddaaaabbbbccccdddd";
 static two_nl_128: &str = "aaa\nbbbbc\nccddddaaaabbbbccccdddd";
