@@ -327,8 +327,8 @@ impl<'a> ErrorBuilder<'a> {
         self
     }
     /// adds a message under the error location
-    pub fn at_span(mut self, msg: String) -> Self {
-        self.at_span = Some(msg);
+    pub fn at_span(mut self, msg: &str) -> Self {
+        self.at_span = Some(String::from(msg));
         self
     }
     /// consumes the builder and prints an error

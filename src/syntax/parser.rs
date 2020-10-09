@@ -154,6 +154,7 @@ impl Parser<'_> {
                     self.handler
                         .error("Unclosed dimension delimiter. Expected `}#`.")
                         .with_span(start)
+                        .at_span("dimension starts here")
                         // @FIXME .with_kind(Error::UnclosedDelimiter)
                         .delay();
                     return Err(Error::UnclosedDelimiter);

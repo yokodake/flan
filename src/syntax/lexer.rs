@@ -181,7 +181,8 @@ impl<'a> Lexer<'a> {
             } else if c.is_whitespace() {
                 self.handler
                     .error("Non-terminated variable. Expected `#`, Found whitespace instead.")
-                    .with_span(span(start, self.pos))
+                    .with_span(span(self.pos, self.pos))
+                    .at_span("add `#` here")
                     .note("Variables have the following syntax: `#$variable#`")
                     .print();
                 // return a wrong Var token, consumer of the TokenStream should check errors
@@ -192,7 +193,7 @@ impl<'a> Lexer<'a> {
                 self.handler
                     // @FIXME illegal characters aren't fatal lexer errors ?
                     .error(format!("Unexpected `{}` in variable name.", c).as_ref())
-                    .with_span(span(start, self.pos))
+                    .with_span(span(self.pos, self.pos))
                     .note(Self::identifier_note().as_ref())
                     .print();
                 err = true;
@@ -200,7 +201,8 @@ impl<'a> Lexer<'a> {
         }
         self.handler
             .error("Non-terminated variable, expected `#`.")
-            .with_span(span(start, self.pos))
+            .with_span(span(start, start + 2))
+            .at_span("variable starts here")
             .note("Variables have the following syntax: `#$variable#`")
             .print();
         self.failure = true;
