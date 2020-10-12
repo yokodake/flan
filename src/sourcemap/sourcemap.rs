@@ -124,7 +124,7 @@ impl SrcMap {
     pub fn load_file(&self, path: &PathBuf, dest: &PathBuf) -> io::Result<SrcFile> {
         let mut file = Self::path_to_file(path, dest)?;
         let start = self.bump_start(file.end.0);
-        file.start = Pos(start);
+        file.start = Pos::from(start);
         file.end += file.start;
         let af = Arc::new(file);
         self.sources.write().unwrap().push(af.clone());
@@ -165,7 +165,7 @@ impl SrcMap {
             destination: dest.clone(), // @TODO absolute path?
             lines,
             start,
-            end: Pos(len as u64),
+            end: Pos::from(len),
         })
     }
     pub fn anal_src(src: &str, offset: Pos) -> Vec<Pos> {
@@ -212,7 +212,7 @@ impl SrcMap {
         }
         None
     }
-    fn bump_start(&self, size: u64) -> u64 {
+    fn bump_start(&self, size: PosInner) -> u64 {
         use std::sync::atomic::Ordering;
         self.start.fetch_add(size + 1, Ordering::Relaxed)
     }

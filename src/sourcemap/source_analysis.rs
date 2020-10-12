@@ -33,7 +33,7 @@ pub unsafe fn anal_src_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
                     break;
                 }
 
-                lines.push(Pos(i as u64) + offset);
+                lines.push(Pos::from(i) + offset);
                 lines_mask &= (!1) << i;
             }
             // done with this chunk
@@ -49,7 +49,7 @@ pub unsafe fn anal_src_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
         anal_src_slow(
             &src[tail_start..],
             src.len() - tail_start,
-            Pos(tail_start as u64) + offset,
+            Pos::from(tail_start) + offset,
             lines,
         );
     }
@@ -88,7 +88,7 @@ pub unsafe fn anal_src_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
                     break;
                 }
 
-                lines.push(Pos(i as u64) + offset);
+                lines.push(Pos::from(i) + offset);
                 lines_mask &= (!1) << i;
             }
             // done with this chunk
@@ -104,7 +104,7 @@ pub unsafe fn anal_src_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
         anal_src_slow(
             &src[tail_start..],
             src.len() - tail_start,
-            Pos(tail_start as u64) + offset,
+            Pos::from(tail_start) + offset,
             lines,
         );
     }

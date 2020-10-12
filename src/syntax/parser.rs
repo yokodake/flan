@@ -224,7 +224,7 @@ impl Term {
                 Some(s)
             }
             TermK::Dimension { name, .. } => {
-                let s = self.span.subspan(1, name.len() as u64);
+                let s = self.span.subspan(1, name.len());
                 Some(s)
             }
         }
@@ -232,7 +232,7 @@ impl Term {
     pub fn opend_span(&self) -> Option<Span> {
         match &self.node {
             TermK::Dimension { name, .. } => {
-                let s = self.span.subspan(0, name.len() as u64 + 1);
+                let s = self.span.subspan(0, name.len() + 1);
                 Some(s)
             }
             _ => None,

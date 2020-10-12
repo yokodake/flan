@@ -7,21 +7,20 @@ pub type PosInner = u64;
 #[repr(transparent)]
 pub struct Pos(pub PosInner);
 
-impl From<PosInner> for Pos {
-    fn from(p: PosInner) -> Pos {
-        Pos(p)
+/// Won't deal with size errors for now
+macro_rules! pos_from {
+    ( $($TY: ty )+ ) => {
+        $(
+        impl From<$TY> for Pos {
+            fn from(p: $TY) -> Pos {
+                Pos(p as PosInner)
+            }
+        }
+        )+
     }
 }
-impl From<usize> for Pos {
-    fn from(p: usize) -> Pos {
-        Pos(p as u64)
-    }
-}
-impl From<i32> for Pos {
-    fn from(p: i32) -> Pos {
-        Pos(p as u64)
-    }
-}
+pos_from!( i32 u32 u64 i64 usize isize );
+
 impl Pos {
     pub fn as_usize(&self) -> usize {
         self.0 as usize
@@ -35,54 +34,72 @@ impl std::fmt::Display for Pos {
 
 impl Add<Pos> for Pos {
     type Output = Pos;
-    fn add(self, other: Pos) -> Pos {
+    fn add(self, other: Pos) -> Self::Output {
         Pos(self.0 + other.0)
-    }
-}
-impl Add<Pos> for PosInner {
-    type Output = Pos;
-    fn add(self, other: Pos) -> Pos {
-        Pos(self + other.0)
-    }
-}
-impl Add<PosInner> for Pos {
-    type Output = Pos;
-    fn add(self, other: PosInner) -> Pos {
-        Pos(self.0 + other)
     }
 }
 impl Sub<Pos> for Pos {
     type Output = Pos;
-    fn sub(self, other: Pos) -> Pos {
+    fn sub(self, other: Pos) -> Self::Output {
         Pos(self.0 - other.0)
     }
 }
-impl Sub<PosInner> for Pos {
-    type Output = Pos;
-    fn sub(self, other: PosInner) -> Pos {
-        Pos(self.0 - other)
-    }
-}
-impl AddAssign for Pos {
+impl AddAssign<Pos> for Pos {
     fn add_assign(&mut self, other: Pos) {
         *self = Pos(self.0 + other.0);
     }
 }
-impl AddAssign<PosInner> for Pos {
-    fn add_assign(&mut self, other: PosInner) {
-        *self = Pos(self.0 + other);
+impl AddAssign<usize> for Pos {
+    fn add_assign(&mut self, other: usize) {
+        *self = Pos(self.0 + other as PosInner);
     }
 }
-impl SubAssign for Pos {
+impl SubAssign<Pos> for Pos {
     fn sub_assign(&mut self, other: Pos) {
-        *self = Pos(self.0 - other.0)
+        *self = Pos(self.0 - other.0);
     }
 }
-impl SubAssign<PosInner> for Pos {
-    fn sub_assign(&mut self, other: PosInner) {
-        *self = Pos(self.0 - other)
-    }
+macro_rules! pos_arith {
+    ($($TY:ty)+) => {
+        $(
+            impl Add<$TY> for Pos {
+                type Output = Pos;
+                fn add(self, other: $TY) -> Self::Output {
+                    Pos(self.0 + other)
+                }
+            }
+            impl Add<Pos> for $TY {
+                type Output = Pos;
+                fn add(self, other: Pos) -> Self::Output {
+                    Pos(self + other.0)
+                }
+            }
+            impl Sub<$TY> for Pos {
+                type Output = Pos;
+                fn sub(self, other: $TY) -> Self::Output {
+                    Pos(self.0 - other)
+                }
+            }
+            impl Sub<Pos> for $TY {
+                type Output = Pos;
+                fn sub(self, other: Pos) -> Self::Output {
+                    Pos(self - other.0)
+                }
+            }
+            impl AddAssign<$TY> for Pos {
+                fn add_assign(&mut self, other: $TY) {
+                    *self = *self + other;
+                }
+            }
+            impl SubAssign<$TY> for Pos {
+                fn sub_assign(&mut self, other: $TY) {
+                    *self = *self - other;
+                }
+            }
+        )+
+    };
 }
+pos_arith!(PosInner);
 
 /// an span inside the sourcemap
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
@@ -118,7 +135,9 @@ impl Span {
     }
     /// makes a subspan from inside (`offset = span.lo`)
     /// Panics if begin and end are invalid
-    pub fn subspan(&self, begin: u64, end: u64) -> Span {
+    pub fn subspan(&self, begin: impl Into<Pos>, end: impl Into<Pos>) -> Span {
+        let begin = begin.into();
+        let end = end.into();
         assert!(end >= begin);
         assert!(self.lo + end <= self.hi);
         Span {
@@ -156,8 +175,8 @@ impl Span {
     /// identity for Span merging/addition
     #[allow(dead_code)]
     pub const MEMPTY: Span = Span {
-        lo: Pos(std::u64::MAX),
-        hi: Pos(std::u64::MIN),
+        lo: Pos(PosInner::MAX),
+        hi: Pos(PosInner::MIN),
     };
 }
 impl std::fmt::Display for Span {

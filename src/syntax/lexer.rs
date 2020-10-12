@@ -85,7 +85,7 @@ impl<'a> Lexer<'a> {
         self.current = self.next;
         self.next = self.src.next();
         // @FIXME don't increment more than once
-        self.pos += self.current.map_or(1, char::len_utf8) as u64;
+        self.pos += self.current.map_or(1, char::len_utf8);
         self.current.clone()
     }
     /// lexes the next token
@@ -279,7 +279,7 @@ impl Token {
 }
 impl Default for Token {
     fn default() -> Token {
-        Token::new(EOF, Pos::from(0 as u64), Pos::from(0 as u64))
+        Token::new(EOF, Pos::from(0), Pos::from(0))
     }
 }
 
