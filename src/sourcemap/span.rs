@@ -25,6 +25,9 @@ impl Pos {
     pub fn as_usize(&self) -> usize {
         self.0 as usize
     }
+    pub fn as_u64(&self) -> u64 {
+        self.0 as u64
+    }
 }
 impl std::fmt::Display for Pos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

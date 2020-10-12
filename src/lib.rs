@@ -1,8 +1,11 @@
-#![feature(option_result_contains)]
-#![feature(int_error_matching)]
-#![feature(type_ascription)]
-#![feature(try_trait)]
-#![feature(new_uninit)]
+#![feature(
+    bufreader_seek_relative,
+    new_uninit,
+    try_trait,
+    type_ascription,
+    int_error_matching,
+    option_result_contains
+)]
 
 pub mod cfg;
 #[doc(inline)]

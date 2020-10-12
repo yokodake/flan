@@ -1,14 +1,15 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::io;
+use std::io::Write;
 use std::iter::FromIterator;
+use std::{fs, io};
 
 use crate::cfg::Choices;
 use crate::env::{Dim, Env};
 use crate::error::Handler;
 use crate::infer;
 use crate::opt_parse::Index;
-use crate::sourcemap::SrcFile;
-use crate::syntax::{Lexer, Name, Parser, Terms, TokenStream};
+use crate::sourcemap::{Pos, SrcFile};
+use crate::syntax::*;
 
 pub fn make_env(
     variables: Vec<(String, String)>,
@@ -158,4 +159,70 @@ pub fn collect_dims<'a>(
             None => (k, Choices::Size(v)),
         })
         .collect()
+}
+
+/// @FIXME pass flags (overriding) and handle escapes
+/// @FIXME handle escaped values
+/// @TODO we could benefit from [`Write::write_vectored`]
+/// @TODO modify Terms with the decision during typechecking so we don't have to search in env?
+pub fn write(terms: &Terms, file: SrcFile, env: &Env) -> io::Result<()> {
+    let in_f = fs::File::open(&file.path)?;
+    let mut reader = io::BufReader::new(in_f);
+    let mut out_f = fs::File::create(&file.destination)?;
+    write_terms(terms, &mut reader, &mut out_f, file.start.as_u64(), env)
+}
+
+fn write_terms(
+    terms: &Terms,
+    from: &mut io::BufReader<fs::File>,
+    to: &mut impl Write,
+    pos: u64,
+    env: &Env,
+) -> io::Result<()> {
+    use std::io::{Seek, SeekFrom};
+    for t in terms {
+        let off = t.span.lo.as_u64() - pos;
+        if off > i64::MAX as u64 {
+            // we'll bigger than the buffer anyways so no need to use
+            // seek_relative
+            todo!();
+        } else {
+            from.seek_relative(off as i64)?;
+        }
+        write_term(t, from, to, pos, env)?;
+    }
+    Ok(())
+}
+
+fn write_term(
+    term: &Term,
+    from: &mut io::BufReader<fs::File>,
+    to: &mut impl Write,
+    pos: u64,
+    env: &Env,
+) -> io::Result<usize> {
+    use std::io::Read;
+    // @TODO use write_vectored?
+    match &term.node {
+        TermK::Text => {
+            // safe alternative?
+            let mut buf = unsafe { Box::<[u8]>::new_uninit_slice(term.span.len()).assume_init() };
+            from.read(&mut buf)?;
+            to.write(&buf)?;
+        }
+        TermK::Var(name) => match env.get_var(name) {
+            Some(v) => {
+                to.write(v.as_bytes())?;
+            }
+            None => panic!("@TODO: var `{}` not found", name),
+        },
+        TermK::Dimension { name, children } => match env.get_dimension(name) {
+            Some(dim) => match children.get(dim.decision as usize) {
+                Some(child) => write_terms(child, from, to, pos, env)?,
+                None => panic!("@TODO: OOB decision for `{}`", name),
+            },
+            None => panic!("@TODO: dim `{}` not found", name),
+        },
+    }
+    Ok(term.span.len())
 }
