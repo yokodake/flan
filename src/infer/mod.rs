@@ -21,14 +21,14 @@ use crate::sourcemap::{Span, Spanned};
 use crate::syntax::{Name, TermK, Terms};
 
 /// typecheck and infer (by mutating `env`) choices and dimensions.
-pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler) -> Option<()> {
+pub fn check(terms: &Terms, env: &mut Env) -> Option<()> {
     let mut errors = false;
     for term in terms {
         match &term.node {
             TermK::Text => {}
             TermK::Var(name) => {
                 if !env.variables.contains_key(name) {
-                    handler
+                    env.handler
                         .error(format!("Undeclared variable `{}`.", name).as_ref())
                         .with_span(term.span)
                         .print();
@@ -38,15 +38,15 @@ pub fn check(terms: &Terms, env: &mut Env, handler: &mut Handler) -> Option<()> 
             TermK::Dimension { name, children } => match env.dimensions.get_mut(name) {
                 Some(d) => {
                     if !d.try_set_dim(children.len() as i8) {
-                        error_size_conflict(handler, name, term.opend_span().unwrap());
+                        error_size_conflict(env.handler, name, term.opend_span().unwrap());
                         errors = true;
                     }
                     for c in children {
-                        errors = check(c, env, handler).is_none() || errors;
+                        errors = check(c, env).is_none() || errors;
                     }
                 }
                 None => {
-                    handler
+                    env.handler
                         .error(format!("Unknown dimension `{}`.", name).as_ref())
                         .with_span(term.opend_span().unwrap())
                         .note("Decision inference is not supported yet. This dimension requires a decision given explicitly.")

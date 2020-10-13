@@ -53,13 +53,6 @@ fn dummy(opt: &Opt) {
     };
     let map = SrcMap::new();
     let mut hp = Handler::new(flags, map.clone());
-    let mut env: infer::Env = match make_env(declared_vars, declared_dims, (n, ni)) {
-        Some(e) => e,
-        None => {
-            eprintln!("Could not make environment");
-            hp.abort()
-        }
-    };
 
     match map.load_file(&opt.file_in, &"".into()) {
         Err(e) => {
@@ -72,7 +65,17 @@ fn dummy(opt: &Opt) {
                 hp.abort();
             }
             Ok(mut p) => {
-                match p.parse().map(|tree| infer::check(&tree, &mut env, &mut hp)) {
+                match p.parse().map(|tree| {
+                    let mut env: infer::Env =
+                        match make_env(declared_vars, declared_dims, (n, ni), &mut hp) {
+                            Some(e) => e,
+                            None => {
+                                eprintln!("Could not make environment");
+                                hp.abort()
+                            }
+                        };
+                    infer::check(&tree, &mut env)
+                }) {
                     Err(_) => {
                         hp.abort();
                     }
@@ -138,47 +141,5 @@ impl Opt {
             }
         }
         Ok((nc, dc))
-    }
-}
-
-struct PrettyDim {
-    name: String,
-    choices: Option<Vec<String>>,
-    size: u8,
-}
-
-impl PrettyDim {
-    pub fn new(name: String, size: u8) -> Self {
-        PrettyDim {
-            name,
-            choices: None,
-            size,
-        }
-    }
-    pub fn new_choices(name: String, size: u8, choices: Vec<String>) -> Self {
-        PrettyDim {
-            name,
-            choices: Some(choices),
-            size,
-        }
-    }
-}
-
-impl std::fmt::Display for PrettyDim {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "dim #{}{{", self.name)?;
-        if self.choices.is_some() {
-            let mut it = self.choices.as_ref().unwrap().iter();
-            match it.next() {
-                Some(i) => write!(f, " {} ", i)?,
-                None => return write!(f, " "),
-            }
-            for i in it {
-                write!(f, "## {} ", i)?;
-            }
-        } else {
-            write!(f, " {} ", self.size)?;
-        }
-        write!(f, "}}#")
     }
 }

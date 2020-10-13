@@ -7,21 +7,31 @@
 //!   to refine delayed_errors.
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+use crate::error::Handler;
+
+#[derive(Debug)]
 /// typechecking/inference environment  
 /// @TODO: use symbols?
-pub struct Env {
+pub struct Env<'a> {
     pub variables: HashMap<String, String>,
     pub dimensions: HashMap<String, Dim>,
+    pub handler: &'a mut Handler,
 }
 
-impl Env {
-    pub fn new(variables: HashMap<String, String>, dimensions: HashMap<String, Dim>) -> Self {
+impl<'a> Env<'a> {
+    pub fn new(
+        variables: HashMap<String, String>,
+        dimensions: HashMap<String, Dim>,
+        handler: &'a mut Handler,
+    ) -> Self {
         Env {
             variables,
             dimensions,
+            handler,
         }
     }
+}
+impl Env<'_> {
     pub fn get_var(&self, name: &String) -> Option<&String> {
         self.variables.get(name)
     }

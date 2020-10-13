@@ -28,3 +28,24 @@ macro_rules! debug {
     () => {#[cfg(debug_assertions)] println!("@DEBUG")};
     ($($arg:tt)*) => {#[cfg(debug_assertions)] println!("DEBUG: {}", format_args!($($arg)*))};
 }
+
+use std::io;
+use std::io::{BufReader, Cursor, Seek};
+pub trait RelativeSeek {
+    fn seek_relative(&mut self, offset: i64) -> io::Result<()>;
+}
+
+impl<R: Seek> RelativeSeek for BufReader<R> {
+    fn seek_relative(&mut self, offset: i64) -> io::Result<()> {
+        self.seek_relative(offset)
+    }
+}
+impl<T> RelativeSeek for Cursor<T>
+where
+    T: AsRef<[u8]>,
+{
+    fn seek_relative(&mut self, offset: i64) -> io::Result<()> {
+        self.seek(io::SeekFrom::Current(offset))?;
+        Ok(())
+    }
+}

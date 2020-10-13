@@ -8,22 +8,23 @@ use crate::env::{Dim, Env};
 use crate::error::Handler;
 use crate::infer;
 use crate::opt_parse::Index;
-use crate::sourcemap::{Pos, SrcFile};
+use crate::sourcemap::SrcFile;
 use crate::syntax::*;
 
 pub enum EResult<T, E, N> {
     Ok(T),
     Err(E),
-    Note(N),
+    None(N),
 }
 
 /// helper to make an env from config file (`variables` and `decl_dim`) and cmd line options
 /// (`chs` and `idxs`)
-pub fn make_env(
+pub fn make_env<'a>(
     variables: Vec<(String, String)>, // declared vars
     decl_dim: Vec<(String, Choices)>, // declared dimensions
     (cns, idxs): (HashSet<String>, HashMap<String, Index>), // decisions
-) -> Option<Env> {
+    handler: &'a mut Handler,
+) -> Option<Env<'a>> {
     let mut dimensions = HashMap::new();
     let mut errors = Vec::new();
     for (dn, chs) in decl_dim {
@@ -36,7 +37,7 @@ pub fn make_env(
                 dimensions.insert(dn, dim);
             }
             // @TODO use error handler
-            EResult::Note(note) => {
+            EResult::None(note) => {
                 println!("{}", note);
             }
             EResult::Err(err) => {
@@ -46,7 +47,7 @@ pub fn make_env(
     }
     if errors.len() == 0 {
         // add idxs left
-        return Some(Env::new(HashMap::from_iter(variables), dimensions));
+        return Some(Env::new(HashMap::from_iter(variables), dimensions, handler));
     }
     for e in errors {
         eprintln!("{}", e);
@@ -61,61 +62,61 @@ fn handle_named(
     idxs: &HashMap<String, Index>,
 ) -> EResult<Dim, String, String> {
     use std::fmt::Write;
-        // we keep this binding (instead of only `ni`) for error repoorting
+    // we keep this binding (instead of only `ni`) for error repoorting
     let idx = idxs.get(dn);
-        let mut ni = maybe_idx(idx, &ons);
-        // list of valid decisions for the current dimension
-        let mut found = Vec::new();
+    let mut ni = maybe_idx(idx, &ons);
+    // list of valid decisions for the current dimension
+    let mut found = Vec::new();
     // if there's a conflict between `idx` and a `chs`
-        let mut conflict = false;
+    let mut conflict = false;
 
-        for (p, on) in ons.iter().enumerate() {
-            if !chs.contains(on) {
-                continue;
-            }
+    for (p, on) in ons.iter().enumerate() {
+        if !chs.contains(on) {
+            continue;
+        }
         if ni.map_or(false, |(n, _)| n != on) {
             conflict = true
-            }
-            if ni.map_or(false, |(n, _)| n == on) {
-                // @TODO use error handler instead.
-                println!(
-                    "note: choices `{}` and `{}={}` are redundant.",
-                    on,
-                    &dn,
-                    idx.unwrap()
-                )
-            }
-            if ni.is_none() {
-                ni = Some((on, p as u8));
-            }
-            found.push(on);
         }
-        // @SAFETY: write! does not fail on Strings
-        #[allow(unused_must_use)]
-        if conflict || found.len() > 1 {
-            // if conflicting decisions
+        if ni.map_or(false, |(n, _)| n == on) {
             // @TODO use error handler instead.
-            let mut msg = String::from("The following choices are conflicting: ");
-            let mut it = found.iter();
-            if conflict {
-                write!(&mut msg, "{}={}", &dn, idx.unwrap());
-            } else {
-                write!(&mut msg, "{}", it.next().unwrap());
-            }
-            for &i in it {
-                write!(&mut msg, ", {}", i);
-            }
+            println!(
+                "note: choices `{}` and `{}={}` are redundant.",
+                on,
+                &dn,
+                idx.unwrap()
+            )
+        }
+        if ni.is_none() {
+            ni = Some((on, p as u8));
+        }
+        found.push(on);
+    }
+    // @SAFETY: write! does not fail on Strings
+    #[allow(unused_must_use)]
+    if conflict || found.len() > 1 {
+        // if conflicting decisions
+        // @TODO use error handler instead.
+        let mut msg = String::from("The following choices are conflicting: ");
+        let mut it = found.iter();
+        if conflict {
+            write!(&mut msg, "{}={}", &dn, idx.unwrap());
+        } else {
+            write!(&mut msg, "{}", it.next().unwrap());
+        }
+        for &i in it {
+            write!(&mut msg, ", {}", i);
+        }
         EResult::Err(msg)
-        } else if !conflict && found.len() == 0 {
-            // if no decision for declared dimension
-        EResult::Note(format!("note: no decision found for dimension `{}`.", dn))
+    } else if !conflict && found.len() == 0 {
+        // if no decision for declared dimension
+        EResult::None(format!("no decision found for declared dimension `{}`.", dn))
     } else { // !conflict && found.len() == 1
         EResult::Ok(Dim {
-                    choices: ons.len() as i8,
-                    decision: ni.unwrap().1,
+            choices: ons.len() as i8,
+            decision: ni.unwrap().1,
         })
-        }
     }
+}
 
 fn handle_sized(
     dn: &str,
@@ -130,12 +131,12 @@ fn handle_sized(
                 // @TODO note: dimensions declared here: 
                 EResult::Err(format!("error: index greater than declared dimension size for decision `{}`=`{}`", dn, i))
             }
-    }
+        }
         Some(Index::Name(n)) => 
             // @TODO note: dimensions declared here: 
             EResult::Err(format!("error: dimension `{}` declared with size `{}`, but a decision name `{}` was given instead of an index.", dn, size, n)),
         None => 
-            EResult::Note(format!("note: no decision found for dimension `{}`.", dn)),
+            EResult::None(format!("note: no decision found for dimension `{}`.", dn)),
     }
 }
 
@@ -220,7 +221,7 @@ pub fn write(terms: &Terms, file: SrcFile, env: &Env) -> io::Result<()> {
     write_terms(terms, &mut reader, &mut out_f, file.start.as_u64(), env)
 }
 
-fn write_terms(
+pub fn write_terms(
     terms: &Terms,
     from: &mut io::BufReader<fs::File>,
     to: &mut impl Write,
@@ -231,9 +232,10 @@ fn write_terms(
     for t in terms {
         let off = t.span.lo.as_u64() - pos;
         if off > i64::MAX as u64 {
-            // we'll bigger than the buffer anyways so no need to use
-            // seek_relative
-            todo!();
+            // i64::MAX is bigger than the buffer anyways
+            from.seek(SeekFrom::Current(i64::MAX))?;
+            let rest = off - i64::MAX as u64;
+            from.seek_relative(rest as i64)?;
         } else {
             from.seek_relative(off as i64)?;
         }
@@ -242,7 +244,7 @@ fn write_terms(
     Ok(())
 }
 
-fn write_term(
+pub fn write_term(
     term: &Term,
     from: &mut io::BufReader<fs::File>,
     to: &mut impl Write,

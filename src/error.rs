@@ -57,35 +57,34 @@ impl Error {
     }
     /// a general error without any specific location
     pub fn error_general(msg: String) -> Self {
-        Self::with_msg_span(Level::Error, msg, Span::MEMPTY)
+        Self::with_msg(Level::Error, msg)
     }
     pub fn error(span: Span, msg: String) -> Self {
         Self::with_msg_span(Level::Error, msg, span)
     }
     pub fn warn_general(msg: String) -> Self {
-        Self::with_msg_span(Level::Warning, msg, Span::MEMPTY)
+        Self::with_msg(Level::Warning, msg)
     }
     pub fn warn(span: Span, msg: String) -> Self {
         Self::with_msg_span(Level::Warning, msg, span)
     }
     pub fn note_general(msg: String) -> Self {
-        Self::with_msg_span(Level::Note, msg, Span::MEMPTY)
+        Self::with_msg(Level::Note, msg)
     }
     pub fn note(span: Span, msg: String) -> Self {
         Self::with_msg_span(Level::Note, msg, span)
     }
     pub fn fatal_unexpected() -> Self {
-        Self::with_msg_span(
-            Level::Fatal,
-            String::from("Unexpected fatal error."),
-            Span::MEMPTY,
-        )
+        Self::with_msg(Level::Fatal, String::from("Unexpected fatal error."))
     }
     pub fn fatal_span(msg: String, span: Span) -> Self {
         Self::with_msg_span(Level::Fatal, msg, span)
     }
     pub fn fatal(msg: String) -> Self {
-        Self::with_msg_span(Level::Fatal, msg, Span::MEMPTY)
+        Self::with_msg(Level::Fatal, msg)
+    }
+    fn with_msg(level: Level, msg: String) -> Self {
+        Self::with_msg_span(level, msg, Span::NIL)
     }
     fn with_msg_span(level: Level, msg: String, span: Span) -> Self {
         Error {
@@ -115,32 +114,37 @@ impl Error {
         use std::fmt::Write;
 
         let mut buf = format!("{}: {}\n", self.level, self.msg);
-        let mut alignment = 0;
+        let mut alignment = 3;
 
         debug!("err.span: {}", self.span);
         if src.is_some() {
-            let src = src.unwrap();
-            let line_ = src.lookup_line(self.span.lo);
-            assert!(line_.is_some());
-            let (lnum, line, lspan) = line_
-                .map(|loc| ((loc.index + 1).to_string(), loc.line, loc.span))
-                .unwrap();
-            let rel_span = self.span.correct(lspan.lo);
+            write!(buf, "in {}", src.as_ref().unwrap().path.display());
+            if !self.span.is_nil() {
+                let src = src.unwrap();
+                let line_ = src.lookup_line(self.span.lo);
+                assert!(line_.is_some());
+                let (lnum, line, lspan) = line_
+                    .map(|loc| ((loc.index + 1).to_string(), loc.line, loc.span))
+                    .unwrap();
+                let rel_span = self.span.correct(lspan.lo);
 
-            alignment = lnum.len() + 1;
-            writeln!(buf, "  {}:{}:{}", src.path.display(), lnum, rel_span.lo + 1);
+                alignment = lnum.len() + 1;
+                writeln!(buf, ":{}:{}", lnum, rel_span.lo + 1);
 
-            writeln!(buf, "{}", Self::align_left("|", alignment));
+                writeln!(buf, "{}", Self::align_left("|", alignment));
 
-            writeln!(buf, "{} | {}", lnum, line);
+                writeln!(buf, "{} | {}", lnum, line);
 
-            // highlight span
-            write!(buf, "{} ", Self::align_left("|", alignment));
-            write!(buf, "{}", Self::align_left("", rel_span.lo.as_usize()));
-            write!(buf, "{}", "^".repeat(rel_span.len()));
-            writeln!(buf, " {}", self.at_span);
+                // highlight span
+                write!(buf, "{} ", Self::align_left("|", alignment));
+                write!(buf, "{}", Self::align_left("", rel_span.lo.as_usize()));
+                write!(buf, "{}", "^".repeat(rel_span.len()));
+                writeln!(buf, " {}", self.at_span);
 
-            writeln!(buf, "{}", Self::align_left("|", alignment));
+                writeln!(buf, "{}", Self::align_left("|", alignment));
+            } else {
+                writeln!(buf, "");
+            }
         }
         for m in self.extra.iter() {
             writeln!(buf, "{} {}", Self::align_left("*", alignment), m);
@@ -357,7 +361,7 @@ impl<'a> ErrorBuilder<'a> {
             level: self.level,
             msg: m,
             extra: messages,
-            span: self.span.unwrap_or(Span::MEMPTY),
+            span: self.span.unwrap_or(Span::NIL),
             // @FIXME
             at_span: self.at_span.clone().unwrap_or(String::from("")),
         }

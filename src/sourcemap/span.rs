@@ -175,12 +175,19 @@ impl Span {
     pub fn hi_as_usize(&self) -> usize {
         self.hi.0 as usize
     }
-    /// identity for Span merging/addition
-    #[allow(dead_code)]
+    /// Identity for Span merging/addition
     pub const MEMPTY: Span = Span {
         lo: Pos(PosInner::MAX),
         hi: Pos(PosInner::MIN),
     };
+    /// Annihilator for Span merging/addition
+    pub const NIL: Span = Span {
+        lo: Pos(PosInner::MIN),
+        hi: Pos(PosInner::MAX),
+    };
+    pub fn is_nil(&self) -> bool {
+        *self == Self::NIL
+    }
 }
 impl std::fmt::Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
