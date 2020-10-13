@@ -30,14 +30,18 @@ macro_rules! debug {
 }
 
 use std::io;
-use std::io::{BufReader, Cursor, Seek};
+use std::io::{BufReader, Cursor, Seek, SeekFrom};
 pub trait RelativeSeek {
     fn seek_relative(&mut self, offset: i64) -> io::Result<()>;
+    fn seek(&mut self, offset: SeekFrom) -> io::Result<u64>;
 }
 
 impl<R: Seek> RelativeSeek for BufReader<R> {
     fn seek_relative(&mut self, offset: i64) -> io::Result<()> {
         self.seek_relative(offset)
+    }
+    fn seek(&mut self, offset: SeekFrom) -> io::Result<u64> {
+        <Self as Seek>::seek(self, offset)
     }
 }
 impl<T> RelativeSeek for Cursor<T>
@@ -45,7 +49,10 @@ where
     T: AsRef<[u8]>,
 {
     fn seek_relative(&mut self, offset: i64) -> io::Result<()> {
-        self.seek(io::SeekFrom::Current(offset))?;
+        <Self as Seek>::seek(self, io::SeekFrom::Current(offset))?;
         Ok(())
+    }
+    fn seek(&mut self, offset: SeekFrom) -> io::Result<u64> {
+        <Self as Seek>::seek(self, offset)
     }
 }

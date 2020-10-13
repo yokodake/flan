@@ -203,10 +203,13 @@ pub struct Spanned<T> {
 }
 
 impl<T> Spanned<T> {
-    pub fn new(node: T, lo: Pos, hi: Pos) -> Spanned<T> {
+    pub fn new(node: T, lo: impl Into<Pos>, hi: impl Into<Pos>) -> Spanned<T> {
         Spanned {
             node: node,
-            span: Span { lo: lo, hi: hi },
+            span: Span {
+                lo: lo.into(),
+                hi: hi.into(),
+            },
         }
     }
     pub fn new_lit(node: T, lo: impl Into<Pos>, hi: impl Into<Pos>) -> Self {

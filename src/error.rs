@@ -256,7 +256,7 @@ impl Handler {
     }
     /// exists in order to avoid code duplication between `print` and `print_all` due to
     /// mutable borrow conflicts of `self`, despite borrowing two different fields
-    /// ```ignore
+    /// ```rs
     /// for e in self.delay_err.iter() { // immutable borrow
     ///   self.print(e) // mutable borrow
     /// }
@@ -271,6 +271,24 @@ impl Handler {
         ErrorBuilder {
             handler: self,
             level: Level::Error,
+            messages: vec![String::from(msg)],
+            span: None,
+            at_span: None,
+        }
+    }
+    pub fn note<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
+        ErrorBuilder {
+            handler: self,
+            level: Level::Note,
+            messages: vec![String::from(msg)],
+            span: None,
+            at_span: None,
+        }
+    }
+    pub fn warn<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
+        ErrorBuilder {
+            handler: self,
+            level: Level::Note,
             messages: vec![String::from(msg)],
             span: None,
             at_span: None,
@@ -297,12 +315,12 @@ impl Pattern<Level> for Level {
 }
 
 pub struct ErrorBuilder<'a> {
-    pub handler: &'a mut Handler,
-    pub level: Level,
+    handler: &'a mut Handler,
+    level: Level,
     /// `messages[0] = Error::message`, the rest are extras
-    pub messages: Vec<String>,
-    pub span: Option<Span>,
-    pub at_span: Option<String>,
+    messages: Vec<String>,
+    span: Option<Span>,
+    at_span: Option<String>,
 }
 
 impl<'a> ErrorBuilder<'a> {
@@ -364,6 +382,13 @@ impl<'a> ErrorBuilder<'a> {
             span: self.span.unwrap_or(Span::NIL),
             // @FIXME
             at_span: self.at_span.clone().unwrap_or(String::from("")),
+        }
+    }
+
+    pub fn is_error(&self) -> bool {
+        match self.level {
+            Level::Fatal | Level::Error => true,
+            _ => false,
         }
     }
 }

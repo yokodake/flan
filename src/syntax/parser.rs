@@ -167,7 +167,7 @@ impl Parser<'_> {
     fn next_token(&mut self) -> Token {
         self.current_token = match self.tokens.pop_front() {
             Some(t) => t,
-            None => Token::new(TokenK::EOF, self.src.len().into(), self.src.len().into()),
+            None => Token::new(TokenK::EOF, self.src.len(), self.src.len()),
         };
         self.current_token
     }

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
-use flan::cfg::Config;
+#[allow(unused_imports)]
 use flan::debug;
 use flan::opt_parse::{Index, OptDec};
 
