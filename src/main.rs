@@ -17,6 +17,7 @@ fn main() {
 }
 
 fn dummy(opt: &Opt) {
+    use flan::cfg::Choices;
     use flan::driver::{file_to_parser, make_env};
     use flan::error::{ErrorFlags, Handler};
     use flan::infer;
@@ -30,11 +31,14 @@ fn dummy(opt: &Opt) {
         }
         Err(e) => return println!("{}", e.to_string()),
     }
-    let declared_dims: Vec<(String, Vec<String>)> = vec![
-        ("dim1".into(), vec!["opt11".into(), "opt12".into()]),
+    let declared_dims: Vec<(String, Choices)> = vec![
+        (
+            "dim1".into(),
+            Choices::Names(vec!["opt11".into(), "opt12".into()]),
+        ),
         (
             "dim2".into(),
-            vec!["opt21".into(), "opt22".into(), "opt23".into()],
+            Choices::Names(vec!["opt21".into(), "opt22".into(), "opt23".into()]),
         ),
     ];
     let declared_vars: Vec<(String, String)> = vec![

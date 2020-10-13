@@ -35,6 +35,7 @@ pub struct Options {
     pub verbosity: Option<u8>,
 }
 /// Dimension Declarations.
+/// @FIXME check whether all Names are unique!!
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum Choices {

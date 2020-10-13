@@ -11,31 +11,70 @@ use crate::opt_parse::Index;
 use crate::sourcemap::{Pos, SrcFile};
 use crate::syntax::*;
 
+pub enum EResult<T, E, N> {
+    Ok(T),
+    Err(E),
+    Note(N),
+}
+
+/// helper to make an env from config file (`variables` and `decl_dim`) and cmd line options
+/// (`chs` and `idxs`)
 pub fn make_env(
-    variables: Vec<(String, String)>,
-    decl_dim: Vec<(String, Vec<String>)>,
-    (chs, idxs): (HashSet<String>, HashMap<String, Index>),
+    variables: Vec<(String, String)>, // declared vars
+    decl_dim: Vec<(String, Choices)>, // declared dimensions
+    (cns, idxs): (HashSet<String>, HashMap<String, Index>), // decisions
 ) -> Option<Env> {
-    use std::fmt::Write;
     let mut dimensions = HashMap::new();
     let mut errors = Vec::new();
-    for (dn, ons) in decl_dim {
+    for (dn, chs) in decl_dim {
+        let r = match chs {
+            Choices::Names(ons) => handle_named(&dn, ons, &cns, &idxs),
+            Choices::Size(i) => handle_sized(&dn, i, &idxs),
+        };
+        match r {
+            EResult::Ok(dim) => {
+                dimensions.insert(dn, dim);
+            }
+            // @TODO use error handler
+            EResult::Note(note) => {
+                println!("{}", note);
+            }
+            EResult::Err(err) => {
+                errors.push(err);
+            }
+        }
+    }
+    if errors.len() == 0 {
+        // add idxs left
+        return Some(Env::new(HashMap::from_iter(variables), dimensions));
+    }
+    for e in errors {
+        eprintln!("{}", e);
+    }
+    None
+}
+
+fn handle_named(
+    dn: &str,
+    ons: Vec<String>,
+    chs: &HashSet<String>,
+    idxs: &HashMap<String, Index>,
+) -> EResult<Dim, String, String> {
+    use std::fmt::Write;
         // we keep this binding (instead of only `ni`) for error repoorting
-        let idx = idxs.get(&dn);
+    let idx = idxs.get(dn);
         let mut ni = maybe_idx(idx, &ons);
         // list of valid decisions for the current dimension
         let mut found = Vec::new();
-        // if there's a conflict between idx & and a `chs`
+    // if there's a conflict between `idx` and a `chs`
         let mut conflict = false;
-        // if ni was not set by maybe_idx
-        let mut set = false;
 
         for (p, on) in ons.iter().enumerate() {
             if !chs.contains(on) {
                 continue;
             }
-            if !set && ni.map_or(false, |(n, _)| n != on) {
-                conflict = true;
+        if ni.map_or(false, |(n, _)| n != on) {
+            conflict = true
             }
             if ni.map_or(false, |(n, _)| n == on) {
                 // @TODO use error handler instead.
@@ -48,7 +87,6 @@ pub fn make_env(
             }
             if ni.is_none() {
                 ni = Some((on, p as u8));
-                set = true;
             }
             found.push(on);
         }
@@ -67,28 +105,38 @@ pub fn make_env(
             for &i in it {
                 write!(&mut msg, ", {}", i);
             }
-            errors.push(msg);
+        EResult::Err(msg)
         } else if !conflict && found.len() == 0 {
             // if no decision for declared dimension
-            println!("note: no decision found for dimension `{}`.", dn)
-        } else {
-            dimensions.insert(
-                dn,
-                Dim {
+        EResult::Note(format!("note: no decision found for dimension `{}`.", dn))
+    } else { // !conflict && found.len() == 1
+        EResult::Ok(Dim {
                     choices: ons.len() as i8,
                     decision: ni.unwrap().1,
-                },
-            );
+        })
         }
     }
 
-    if errors.len() == 0 {
-        return Some(Env::new(HashMap::from_iter(variables), dimensions));
+fn handle_sized(
+    dn: &str,
+    size: u8,
+    decisions: &HashMap<String, Index>,
+) -> EResult<Dim, String, String> {
+    match decisions.get(dn) {
+        Some(Index::Num(i)) => {
+            if *i < size {
+                EResult::Ok(Dim {choices: size as i8, decision: *i})
+            } else {
+                // @TODO note: dimensions declared here: 
+                EResult::Err(format!("error: index greater than declared dimension size for decision `{}`=`{}`", dn, i))
+            }
     }
-    for e in errors {
-        eprintln!("{}", e);
+        Some(Index::Name(n)) => 
+            // @TODO note: dimensions declared here: 
+            EResult::Err(format!("error: dimension `{}` declared with size `{}`, but a decision name `{}` was given instead of an index.", dn, size, n)),
+        None => 
+            EResult::Note(format!("note: no decision found for dimension `{}`.", dn)),
     }
-    None
 }
 
 /// tries get the name and index pair from an [`Index`] and a list of choices

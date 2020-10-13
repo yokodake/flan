@@ -87,15 +87,6 @@ impl Error {
     pub fn fatal(msg: String) -> Self {
         Self::with_msg_span(Level::Fatal, msg, Span::MEMPTY)
     }
-    fn with_level(level: Level) -> Self {
-        Error {
-            level,
-            msg: String::from(""),
-            span: Span::MEMPTY,
-            extra: Vec::new(),
-            at_span: String::from(""),
-        }
-    }
     fn with_msg_span(level: Level, msg: String, span: Span) -> Self {
         Error {
             level,
