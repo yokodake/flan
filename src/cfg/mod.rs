@@ -24,6 +24,27 @@ pub struct Config {
     /// source -> destination map
     pub paths: Option<HashMap<PathBuf, PathBuf>>,
 }
+impl Config {
+    pub fn dimensions(&self) -> impl Iterator<Item = (&String, &Choices)> + '_ {
+        self.dimensions.iter().flatten()
+    }
+    pub fn variables(&self) -> impl Iterator<Item = (&String, &String)> + '_ {
+        self.variables.iter().flatten()
+    }
+    pub fn paths(&self) -> impl Iterator<Item = (&PathBuf, &PathBuf)> + '_ {
+        self.paths.iter().flatten()
+    }
+}
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            options: None,
+            variables: None,
+            dimensions: None,
+            paths: None,
+        }
+    }
+}
 /// default values for command-line optional arguments.
 #[derive(Deserialize, Debug)]
 pub struct Options {
@@ -34,6 +55,9 @@ pub struct Options {
     /// [`error::ErrorFlags`]: ../error/struct.ErrorFlags.html
     pub verbosity: Option<u8>,
 }
+pub const DEFAULT_FORCE: bool = false;
+pub const DEFAULT_VERBOSITY: u8 = 3;
+
 /// Dimension Declarations.
 /// @FIXME check whether all Names are unique!!
 #[derive(Deserialize, Debug)]
@@ -64,7 +88,7 @@ impl fmt::Display for Error {
 }
 
 /// open config file and parse it.
-pub fn path_to_cfg(path: &Path) -> Result<Config, Error> {
+pub fn path_to_cfg<P: AsRef<Path>>(path: P) -> Result<Config, Error> {
     file_to_cfg(&mut File::open(path).map_err(Error::IO)?)
 }
 /// parse config file.

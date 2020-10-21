@@ -1,14 +1,12 @@
 use std::collections::HashMap;
-use std::io::{BufRead, Cursor, Read, Write};
+use std::io::Cursor;
 use std::iter::FromIterator;
-use std::sync::Arc;
 
 use flan::driver::*;
 use flan::env::{Dim, Env};
 use flan::error::{ErrorFlags, Handler};
 use flan::sourcemap::SrcMap;
 use flan::syntax::{Term, TermK};
-use flan::utils::RelativeSeek;
 
 macro_rules! mock_env {
     () => {

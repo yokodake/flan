@@ -2,92 +2,88 @@
 #![feature(option_result_contains)]
 use std::collections::{HashMap, HashSet};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use structopt::StructOpt;
 
+use flan::cfg;
+use flan::cfg::{path_to_cfg, Config, DEFAULT_VERBOSITY};
 #[allow(unused_imports)]
 use flan::debug;
+use flan::error::{ErrorFlags, Handler};
+use flan::infer;
 use flan::opt_parse::{Index, OptDec};
+use flan::sourcemap::SrcMap;
 
 fn main() {
+    use flan::driver::*;
     let opt = Opt::from_args();
-    // println!("{:?}\n", opt);
-    dummy(&opt);
-}
-
-fn dummy(opt: &Opt) {
-    use flan::cfg::Choices;
-    use flan::driver::{file_to_parser, make_env};
-    use flan::error::{ErrorFlags, Handler};
-    use flan::infer;
-    use flan::sourcemap::SrcMap;
-
-    let (n, ni);
-    match opt.parse_decisions() {
-        Ok((x, y)) => {
-            n = x;
-            ni = y;
+    let config_file = match opt.config_file {
+        Some(ref path) => path_to_cfg(path.clone()),
+        None => {
+            if Path::new(".flan").exists() {
+                path_to_cfg(".flan")
+            } else {
+                Ok(Config::default())
+            }
         }
-        Err(e) => return println!("{}", e.to_string()),
+    };
+    let config_file = match config_file {
+        Ok(f) => f,
+        Err(_) => {
+            // @FIXME error handling
+            eprintln!("config failure.");
+            std::process::abort();
+        }
+    };
+    let eflags = override_flags(opt.error_flags(), config_file.options.as_ref());
+    let source_map = SrcMap::new();
+    let mut sources = vec![];
+    for (src, dst) in config_file.paths() {
+        if src.is_dir() {
+            // @TODO traverse and collect files
+        } else {
+            match source_map.load_file(src, dst) {
+                // @FIXME error handling
+                Err(_) => eprintln!("couldn't load {}", src.to_string_lossy()),
+                Ok(f) => sources.push(f.clone()),
+            }
+        }
     }
-    let declared_dims: Vec<(String, Choices)> = vec![
-        (
-            "dim1".into(),
-            Choices::Names(vec!["opt11".into(), "opt12".into()]),
-        ),
-        (
-            "dim2".into(),
-            Choices::Names(vec!["opt21".into(), "opt22".into(), "opt23".into()]),
-        ),
-    ];
-    let declared_vars: Vec<(String, String)> = vec![
-        ("foo".into(), "foo_val".into()),
-        ("bar/baz".into(), "bar/baz_val".into()),
-    ];
-    let flags = ErrorFlags {
-        no_extra: false,
-        report_level: 5,
-        warn_as_error: false,
-        dry_run: false,
-    };
-    let map = SrcMap::new();
-    let mut hp = Handler::new(flags, map.clone());
-
-    match map.load_file(&opt.file_in, &"".into()) {
-        Err(e) => {
-            hp.print_all();
-            eprintln!("{}", e);
-            hp.abort();
-        }
-        Ok(f) => match file_to_parser(&mut hp, f.clone()) {
+    let mut trees = vec![];
+    for f in sources {
+        let mut h = Handler::new(eflags, source_map.clone());
+        // @FIXME error handling
+        match file_to_parser(&mut h, f.clone()) {
+            Ok(mut p) => match p.parse() {
+                Ok(tree) => {
+                    trees.push(tree);
+                }
+                Err(_) => {
+                    h.print_all();
+                }
+            },
             Err(_) => {
-                hp.abort();
+                h.print_all();
+                eprintln!("failed to parse {}", f.path.to_string_lossy());
+                continue;
             }
-            Ok(mut p) => {
-                match p.parse().map(|tree| {
-                    let mut env: infer::Env =
-                        match make_env(declared_vars, declared_dims, (n, ni), &mut hp) {
-                            Some(e) => e,
-                            None => {
-                                eprintln!("Could not make environment");
-                                hp.abort()
-                            }
-                        };
-                    infer::check(&tree, &mut env)
-                }) {
-                    Err(_) => {
-                        hp.abort();
-                    }
-                    Ok(None) => {
-                        eprintln!("Type Checking failure.");
-                        hp.abort();
-                    }
-                    Ok(Some(_)) => println!("success."),
-                };
-            }
-        },
-    };
+        }
+    }
+    let mut h = Handler::new(eflags, source_map.clone());
+    let variables = config_file.variables().collect();
+    let decl_dims = config_file.dimensions().collect();
+    // @TODO handle errors
+    let decisions = opt.parse_decisions().unwrap();
+    let mut env = make_env(variables, decl_dims, decisions, &mut h).unwrap();
+
+    // @TODO handle collect
+    for tree in trees.iter() {
+        // @TODO handle errors
+        infer::check(&tree, &mut env);
+    }
+
+    // @TODO driver::write_files
 }
 
 #[derive(StructOpt, Clone, PartialEq, Eq, Debug)]
@@ -108,8 +104,11 @@ struct Opt {
     #[structopt(short, long)]
     /// explain what is being done
     verbose: bool,
+    #[structopt(long = "Werror")]
+    /// make all warnings into errors (@TODO: handle this in handler)
+    warn_error: bool,
     #[structopt(short = "q", long = "query-dimensions")]
-    /// list all dimensions (TODO: that require a decision).
+    /// list all dimensions (@TODO: that require a decision).
     query_dims: bool,
     #[structopt(name = "PATH", short = "c", long = "config")]
     /// use this config file instead
@@ -142,4 +141,37 @@ impl Opt {
         }
         Ok((nc, dc))
     }
+    pub fn error_flags(&self) -> ErrorFlags {
+        let mut report_level = DEFAULT_VERBOSITY;
+        if self.verbose {
+            report_level = 5;
+        }
+        if self.no_warn {
+            report_level = 2;
+        }
+        if self.silence {
+            report_level = 0;
+        }
+        let mut no_extra = false;
+        if self.silence {
+            no_extra = true;
+        }
+        ErrorFlags {
+            report_level,
+            no_extra,
+            warn_as_error: self.warn_error,
+            dry_run: self.dry_run,
+        }
+    }
+}
+
+pub fn override_flags(flags: ErrorFlags, config: Option<&cfg::Options>) -> ErrorFlags {
+    let mut flags = flags;
+    if config.is_none() {
+        return flags;
+    }
+    let config = config.unwrap();
+
+    flags.report_level = config.verbosity.unwrap_or(flags.report_level);
+    flags
 }
