@@ -12,6 +12,9 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use toml::de;
 
+pub use opt_parse::StructOpt;
+pub use opt_parse::{Opt, DEFAULT_VERBOSITY};
+
 /// contents of a configuration file.
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -33,6 +36,12 @@ impl Config {
     }
     pub fn paths(&self) -> impl Iterator<Item = (&PathBuf, &PathBuf)> + '_ {
         self.paths.iter().flatten()
+    }
+    pub fn variables_cloned(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        self.variables.clone().into_iter().flatten()
+    }
+    pub fn dimensions_cloned(&self) -> impl Iterator<Item = (String, Choices)> + '_ {
+        self.dimensions.clone().into_iter().flatten()
     }
 }
 impl Default for Config {
@@ -56,11 +65,10 @@ pub struct Options {
     pub verbosity: Option<u8>,
 }
 pub const DEFAULT_FORCE: bool = false;
-pub const DEFAULT_VERBOSITY: u8 = 3;
 
 /// Dimension Declarations.
 /// @FIXME check whether all Names are unique!!
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Choices {
     Size(u8),

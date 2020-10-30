@@ -12,12 +12,12 @@ use super::span::*;
 #[derive(Hash, Debug, Clone, PartialEq)]
 /// Information about the Source
 pub enum SourceInfo {
-    Src(String),
+    Source(String),
     /// we do not need the source for binary files
     Binary,
 }
 /// File info + source
-#[derive(Hash, Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct File {
     /// file name without path
     pub name: String,
@@ -32,21 +32,25 @@ pub struct File {
 }
 impl File {
     /// panics if not a file name
-    pub fn new(path: PathBuf) -> File {
+    pub fn new(path: PathBuf, destination: PathBuf, src: SourceInfo) -> File {
         let name = path.file_name().unwrap().to_string_lossy().into();
+        let end = match &src {
+            SourceInfo::Source(s) => s.len() - 1,
+            _ => 1,
+        };
         File {
             name,
-            path: path,
-            destination: PathBuf::from(""), // @TODO
-            src: SourceInfo::Src(String::from("")),
+            path,
+            destination,
+            src: src,
             lines: Vec::new(),
             start: Pos(0),
-            end: Pos(0),
+            end: Pos::from(end),
         }
     }
     pub fn is_source(&self) -> bool {
         match self.src {
-            SourceInfo::Src(_) => true,
+            SourceInfo::Source(_) => true,
             _ => false,
         }
     }
@@ -86,7 +90,7 @@ impl File {
     /// gets the contents of the line of code from the source file.
     pub fn get_loc(&self, line_num: usize) -> Option<Cow<'_, str>> {
         let s = (*(self.lines.get(line_num)?) - self.start).as_usize();
-        if let SourceInfo::Src(src) = &self.src {
+        if let SourceInfo::Source(src) = &self.src {
             let lbeg = &src.as_str()[s..];
             let loc = match src.as_str()[s..].find('\n') {
                 Some(e) => &lbeg[..e],
@@ -121,7 +125,7 @@ impl SrcMap {
         })
     }
     /// load a file and add it to the map
-    pub fn load_file(&self, path: &PathBuf, dest: &PathBuf) -> io::Result<SrcFile> {
+    pub fn load_file(&self, path: PathBuf, dest: PathBuf) -> io::Result<SrcFile> {
         let mut file = Self::path_to_file(path, dest)?;
         let start = self.bump_start(file.end.0);
         file.start = Pos::from(start);
@@ -131,7 +135,7 @@ impl SrcMap {
         Ok(af)
     }
     /// helper that builds a [`File`] from a path
-    pub fn path_to_file(path: &PathBuf, dest: &PathBuf) -> io::Result<File> {
+    pub fn path_to_file(path: PathBuf, destination: PathBuf) -> io::Result<File> {
         use std::io::{Error, ErrorKind};
         // @TODO
         if !path.is_file() {
@@ -155,14 +159,14 @@ impl SrcMap {
             Ok(s) => {
                 let l = s.len();
                 lines = Self::anal_src(s.as_ref(), start);
-                (SourceInfo::Src(s), l)
+                (SourceInfo::Source(s), l)
             }
         };
         Ok(File {
             name,
-            path: path.clone(),
-            src: src,
-            destination: dest.clone(), // @TODO absolute path?
+            path,
+            src,
+            destination, // @TODO absolute path?
             lines,
             start,
             end: Pos::from(len),
