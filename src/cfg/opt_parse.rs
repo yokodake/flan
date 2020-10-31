@@ -43,6 +43,7 @@ impl std::fmt::Display for Error {
         write!(f, "{}", self.msg)
     }
 }
+#[derive(Hash, Debug, PartialEq)]
 /// command line passed Decision
 pub enum OptDec {
     /// by name
@@ -52,13 +53,13 @@ pub enum OptDec {
 }
 impl OptDec {
     /// parse one decision
-    pub fn parse_decision(str: &String) -> Result<Self, Error> {
-        let mut it = str.splitn(2, '=');
+    pub fn parse_decision<Str: AsRef<str>>(str: &Str) -> Result<Self, Error> {
+        let mut it = str.as_ref().splitn(2, '=');
         // splitn will give us at the very least "" as first elem
-        let k = it.next().unwrap();
+        let k = it.next().unwrap().trim();
         let i = it.next();
         match i {
-            Some(s) => Self::parse_dim(k, s),
+            Some(s) => Self::parse_dim(k, s.trim()),
             None => Self::parse_name(k),
         }
     }

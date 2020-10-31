@@ -96,7 +96,7 @@ impl Choices {
         };
         match self {
             Choices::Size(i) => *i <= i8::MAX as u8,
-            Choices::Names(ns) => has_dup(ns),
+            Choices::Names(ns) => !has_dup(ns),
         }
     }
 }
