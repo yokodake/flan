@@ -50,15 +50,19 @@ impl Parser<'_> {
         p.next_token();
         p
     }
+    /// entry function for new parser
     pub fn parse(&mut self) -> Parsed<Terms> {
         self.parse_terms().and_then(|ts| {
             if self.handler.err_count > 0 {
+                // @TODO could be improved
+                // valid parse tree but errors => non fatal lexing errors
                 Err(Error::LexerError)
             } else {
                 Ok(ts)
             }
         })
     }
+    /// parse multiple Terms
     pub fn parse_terms(&mut self) -> Parsed<Terms> {
         let mut terms = Vec::new();
         loop {

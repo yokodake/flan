@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::iter::FromIterator;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{fs, io};
-use std::path::{PathBuf, Path};
 
 use crate::cfg;
 use crate::cfg::Choices;
@@ -56,7 +56,7 @@ pub fn make_env<'a>(
     None
 }
 
-/// handle named Index
+/// handle named Index for [`make_env`]
 fn handle_named<'a>(
     dn: &str,
     ons: Vec<String>,
@@ -127,7 +127,7 @@ fn handle_named<'a>(
     }
 }
 
-/// handle Sized Index
+/// handle Sized Index for [`make_env`]
 fn handle_sized<'a>(
     dn: &str,
     size: u8,
@@ -143,15 +143,16 @@ fn handle_sized<'a>(
                 Err(handler.error(format!("index greater than declared dimension size for decision `{}`=`{}`", dn, i).as_ref()))
             }
         }
-        Some(Index::Name(n)) => 
+        Some(Index::Name(n)) =>
             // @TODO note: dimensions declared here: 
             Err(handler.error(format!("dimension `{}` declared with size `{}`, but a decision name `{}` was given instead of an index.", dn, size, n).as_ref())),
-        None => 
+        None =>
             Err(handler.note(format!("no decision found for dimension `{}`.", dn).as_ref())),
     }
 }
 
-/// tries get the name and index pair from an [`Index`] and a list of choices
+/// tries to get the name and index pair from an [`Index`] and a list of choices
+/// returns `None` if the named decision isn't in choices, or index is out of bounds of choices.
 pub fn maybe_idx<'a>(i: Option<&'a Index>, choices: &'a Vec<String>) -> Option<(&'a String, u8)> {
     match i? {
         Index::Name(n) => {
@@ -165,6 +166,7 @@ pub fn maybe_idx<'a>(i: Option<&'a Index>, choices: &'a Vec<String>) -> Option<(
     }
 }
 
+/// fill the env with the remaining decisions
 pub fn fill_env(decisions: HashMap<String, Index>, env: &mut Env) {
     for (dn, idx) in decisions.into_iter() {
         match idx {
@@ -202,19 +204,16 @@ pub fn string_to_parser<'a>(h: &'a mut Handler, str: String) -> Option<Parser<'a
     source_to_stream(h, str.as_ref()).map(move |ts| Parser::new(h, str, ts, Pos::from(0 as usize)))
 }
 
-pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> io::Result<Parser<'a>> {
+pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> Option<Parser<'a>> {
     use crate::sourcemap::SourceInfo;
-    use std::io::{Error, ErrorKind};
     match source.src {
-        SourceInfo::Source(ref s) => Ok(string_to_parser(h, s.clone())
-            .ok_or_else(|| Error::new(ErrorKind::Other, "aborting due to previous errors"))?),
-        SourceInfo::Binary => Err(Error::new(
-            ErrorKind::InvalidInput,
-            "binary data cannot be parsed",
-        )),
+        SourceInfo::Source(ref s) => string_to_parser(h, s.clone()),
+        SourceInfo::Binary => None,
     }
 }
 
+/// wrapper around [`infer::collect`].
+/// see [`cfg::Opt::query_dims`] cmd-arg option
 pub fn collect_dims<'a>(
     terms: &Terms,
     h: &mut Handler,
@@ -234,6 +233,7 @@ pub fn collect_dims<'a>(
 /// @FIXME handle escaped values
 /// @TODO we could benefit from [`Write::write_vectored`]
 /// @TODO modify Terms with the decision during typechecking so we don't have to search in env?
+/// processes and writes to the destination file.
 pub fn write(file: SrcFile, terms: &Terms, env: &Env) -> io::Result<()> {
     let in_f = fs::File::open(&file.path)?;
     let mut reader = io::BufReader::new(in_f);
@@ -245,6 +245,8 @@ pub fn write(file: SrcFile, terms: &Terms, env: &Env) -> io::Result<()> {
 use crate::utils::RelativeSeek;
 use std::io::{BufRead, Write};
 
+/// write the terms to `to`.
+/// `start` is the (starting) position in the Reader `from`
 pub fn write_terms<R: RelativeSeek + BufRead>(
     terms: &Terms,
     from: &mut R,
@@ -273,6 +275,8 @@ pub fn write_terms<R: RelativeSeek + BufRead>(
     Ok(pos)
 }
 
+/// writes one term to `to`.
+/// `start` is the (starting) position in the Reader `from`
 pub fn write_term<R: RelativeSeek + BufRead>(
     term: &Term,
     from: &mut R,
@@ -307,11 +311,13 @@ pub fn write_term<R: RelativeSeek + BufRead>(
     }
 }
 
+/// helper to make a handler from cmdline ops and the configuration file.
 pub fn make_handler(opt: &cfg::Opt, cfg_file: &cfg::Config, srcmap: Arc<SrcMap>) -> Handler {
     let eflags = override_flags(opt.error_flags(), cfg_file.options.as_ref());
     Handler::new(eflags, srcmap)
 }
 
+/// @FIXME flags from cmd-line should override those from config, not the opposite!
 pub fn override_flags(flags: ErrorFlags, config: Option<&cfg::Options>) -> ErrorFlags {
     let mut flags = flags;
     if config.is_none() {
@@ -323,6 +329,9 @@ pub fn override_flags(flags: ErrorFlags, config: Option<&cfg::Options>) -> Error
     flags
 }
 
+/// get the config file from the current working directory if `None` is passed.
+/// returns a default config if `.flan` doesn't exist.
+/// see [`cfg::path_to_cfg`]
 pub fn get_config(config_path: &Option<PathBuf>) -> Result<cfg::Config, cfg::Error> {
     match config_path {
         Some(ref path) => cfg::path_to_cfg(path.clone()),
@@ -336,7 +345,10 @@ pub fn get_config(config_path: &Option<PathBuf>) -> Result<cfg::Config, cfg::Err
     }
 }
 
-pub fn load_sources<'a, It : Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(paths: It) -> (Arc<SrcMap>, Vec<SrcFile>) {
+/// load all the sources in the source map and returns them in a `Vec`
+pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
+    paths: It,
+) -> (Arc<SrcMap>, Vec<SrcFile>) {
     let source_map = SrcMap::new();
     let mut sources = vec![];
     for (src, dst) in paths {
@@ -354,12 +366,12 @@ pub fn load_sources<'a, It : Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(paths:
     (source_map, sources)
 }
 
-pub fn parse_sources(sources :Vec<SrcFile>, h: &mut Handler) -> Vec<(SrcFile, Terms)> {
+/// Does not fail, only report. Caller should check if all sources passed yielded Terms
+pub fn parse_sources(sources: Vec<SrcFile>, h: &mut Handler) -> Vec<(SrcFile, Terms)> {
     let mut trees = vec![];
     for f in sources {
-        // @FIXME error handling
         match file_to_parser(h, f.clone()) {
-            Ok(mut p) => match p.parse() {
+            Some(mut p) => match p.parse() {
                 Ok(tree) => {
                     trees.push((f, tree));
                 }
@@ -367,9 +379,8 @@ pub fn parse_sources(sources :Vec<SrcFile>, h: &mut Handler) -> Vec<(SrcFile, Te
                     h.print_all();
                 }
             },
-            Err(_) => {
+            None => {
                 h.print_all();
-                eprintln!("failed to parse {}", f.path.to_string_lossy());
                 continue;
             }
         }

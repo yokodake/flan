@@ -33,8 +33,6 @@ pub struct Lexer<'a> {
     current: Option<char>,
     /// number of Open dimension delimiters
     nest: usize, // @NOTE usize is probably overkill
-    /// position of escaped chars
-    escapes: Vec<Pos>,
 
     /// @REFACTOR
     failure: bool,
@@ -57,7 +55,6 @@ impl<'a> Lexer<'a> {
             handler: h,
             current: None,
             next: None,
-            escapes: Vec::new(),
             failure: false,
         };
         l.current = l.src.next();
@@ -93,9 +90,9 @@ impl<'a> Lexer<'a> {
         let start = self.pos;
         match self.current {
             None => return Spanned::new(EOF, start, self.pos),
+            // @FIXME make 2 Text spans, ignoring the `\\`
             Some('\\') => match self.peek0() {
                 '#' | '}' => {
-                    self.escapes.push(self.pos);
                     self.bump(); // eat '\'
                     self.bump(); // eat escaped char
                     return self.next_token();

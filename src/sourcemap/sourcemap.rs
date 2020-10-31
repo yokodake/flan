@@ -151,6 +151,7 @@ impl SrcMap {
             Err(e) => {
                 if e.kind() == ErrorKind::InvalidData {
                     lines = vec![];
+                    // @TODO double check if size `1` doesn't lead to bugs
                     (SourceInfo::Binary, 1)
                 } else {
                     return Err(e);
