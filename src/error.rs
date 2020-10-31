@@ -27,6 +27,7 @@ pub enum Level {
     Error,
     Warning,
     Note,
+    More,
 }
 impl Level {
     pub fn is_fatal(&self) -> bool {
@@ -46,6 +47,7 @@ impl std::fmt::Display for Level {
                 Level::Error => "error",
                 Level::Warning => "warning",
                 Level::Note => "note",
+                Level::More => "",
             }
         )
     }
@@ -106,6 +108,7 @@ impl Error {
             Level::Error => 2,
             Level::Warning => 3,
             Level::Note => 4,
+            Level::More => 5,
         }
     }
     pub fn render(&self, src: Option<SrcFile>) -> String {

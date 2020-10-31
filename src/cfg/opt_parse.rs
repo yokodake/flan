@@ -1,12 +1,48 @@
 //! Command line parsing helpers
 use std::collections::{HashMap, HashSet};
-use std::io;
 use std::path::PathBuf;
 
 pub use structopt::StructOpt;
 
-use crate::error::ErrorFlags;
-
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub enum ErrorKind {
+    OutOfRange,
+    InvalidChoice,
+    InvalidIdentifier,
+}
+#[derive(Debug, Hash, PartialOrd, PartialEq)]
+pub struct Error {
+    pub msg: String,
+    pub kind: ErrorKind,
+}
+impl Error {
+    pub fn new(kind: ErrorKind, msg: String) -> Self {
+        Error { kind, msg }
+    }
+    pub fn out_of_range(lexeme: &str) -> Self {
+        Error { 
+            kind: ErrorKind::OutOfRange,
+            msg: format!("Numeric choice `{}` is out of range.\n note: consulte --help for a more detailed explanation.", lexeme)
+        }
+    }
+    pub fn invalid_choice(lexeme: &str) -> Self {
+        Error { 
+            kind: ErrorKind::InvalidChoice,
+            msg: format!("`{}` is not a valid choice.\n note: consulte --help for a more detailed explanation.", lexeme),
+        }
+    }
+    pub fn invalid_identifier(lexeme: &str) -> Self {
+        Error {
+            kind: ErrorKind::InvalidIdentifier,
+            msg: format!("`{}` is not a valid identifier.\n note: consult --help for a more detailed explanation.", lexeme),
+        }
+    }
+}
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.msg)
+    }
+}
 /// command line passed Decision
 pub enum OptDec {
     /// by name
@@ -16,7 +52,7 @@ pub enum OptDec {
 }
 impl OptDec {
     /// parse one decision
-    pub fn parse_decision(str: &String) -> io::Result<Self> {
+    pub fn parse_decision(str: &String) -> Result<Self, Error> {
         let mut it = str.splitn(2, '=');
         // splitn will give us at the very least "" as first elem
         let k = it.next().unwrap();
@@ -27,42 +63,39 @@ impl OptDec {
         }
     }
     /// [`OptDec::WithDim`]
-    fn parse_dim(k: &str, i: &str) -> io::Result<Self> {
+    fn parse_dim(k: &str, i: &str) -> Result<Self, Error> {
         Self::validate_id(k)?;
         let idx = Self::parse_idx(i)?;
         Ok(Self::WithDim(k.into(), idx))
     }
-    /// variable name
-    fn parse_name(n: &str) -> io::Result<Self> {
+    /// [`OptDec::Name`]
+    fn parse_name(n: &str) -> Result<Self, Error> {
         Self::validate_id(n)?;
         Ok(Self::Name(n.into()))
     }
     /// [`Index`]
-    fn parse_idx(s: &str) -> io::Result<Index> {
-        use std::io::{Error, ErrorKind};
+    fn parse_idx(s: &str) -> Result<Index, Error> {
         use std::num::IntErrorKind;
         return match s.parse() {
             Ok(i) if i < 128 => Ok(Index::Num(i)),
-            Err(e) if  *e.kind() != IntErrorKind::Overflow => {
+            Err(e) if  *e.kind() == IntErrorKind::Overflow => Err(Error::out_of_range(s)),
+            _ => {
                 if Self::validate_id(s).is_ok() {
                     Ok(Index::Name(s.into()))
                 } else {
-                    Err(Error::new(ErrorKind::InvalidInput, format!("`{}` is not a valid choice.\n note: consulte --help for a more detailed explanation.", s)))
+                    Err(Error::invalid_choice(s))
                 }
             }
-            _ => Err(Error::new(ErrorKind::InvalidInput, format!("Numeric choice `{}` is out of range.\n note: consulte --help for a more detailed explanation.", s)))
         };
     }
-    fn validate_id(s: &str) -> io::Result<()> {
-        use std::io::{Error, ErrorKind};
-
+    fn validate_id(s: &str) -> Result<(), Error> {
         if s.len() > 0
             && (|c: char| c.is_alphabetic() || c == '_')(s.chars().next().unwrap())
             && !s.contains(|c: char| !c.is_alphanumeric() && c != '_')
         {
             Ok(())
         } else {
-            Err(Error::new(ErrorKind::InvalidInput, format!("`{}` is not a valid identifier.\n note: consult --help for a more detailed explanation.", s)))
+            Err(Error::invalid_identifier(s))
         }
     }
 }
@@ -124,7 +157,7 @@ pub struct Opt {
     pub decisions: Vec<String>,
 }
 impl Opt {
-    pub fn parse_decisions(&self) -> io::Result<(HashSet<String>, HashMap<String, Index>)> {
+    pub fn parse_decisions(&self) -> Result<(HashSet<String>, HashMap<String, Index>), Error> {
         let mut nc = HashSet::new();
         let mut dc = HashMap::new();
         for s in &self.decisions {
@@ -139,28 +172,29 @@ impl Opt {
         }
         Ok((nc, dc))
     }
-    pub fn error_flags(&self) -> ErrorFlags {
-        let mut report_level = DEFAULT_VERBOSITY;
+    pub fn report_level(&self) -> Option<u8> {
+        let mut report_level: Option<u8> = None;
         if self.verbose {
-            report_level = 5;
+            report_level = Some(5);
         }
         if self.no_warn {
-            report_level = 2;
+            report_level = Some(2);
         }
         if self.silence {
-            report_level = 0;
+            report_level = Some(0);
         }
-        let mut no_extra = false;
-        if self.silence {
-            no_extra = true;
-        }
-        ErrorFlags {
-            report_level,
-            no_extra,
-            warn_as_error: self.warn_error,
-            dry_run: self.dry_run,
-        }
+        report_level
+    }
+    pub fn no_extra(&self) -> bool {
+        self.silence
+    }
+    pub fn dry_run(&self) -> bool {
+        self.dry_run
+    }
+    pub fn warn_error(&self) -> bool {
+        self.warn_error
     }
 }
 
-pub const DEFAULT_VERBOSITY: u8 = 3;
+/// see [`ErrorFlags::report_level`]
+pub const DEFAULT_VERBOSITY: u8 = 4;

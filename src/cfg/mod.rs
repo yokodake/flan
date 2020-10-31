@@ -80,6 +80,26 @@ impl Config {
         toml::from_str(s)
     }
 }
+impl Choices {
+    pub fn valid(&self) -> bool {
+        fn has_dup(xs: &Vec<String>) -> bool {
+            use std::collections::HashSet;
+            let mut hs = HashSet::new();
+            for x in xs {
+                if hs.contains(x) {
+                    return true;
+                } else {
+                    hs.insert(x);
+                }
+            }
+            false
+        };
+        match self {
+            Choices::Size(i) => *i <= i8::MAX as u8,
+            Choices::Names(ns) => has_dup(ns),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Error {

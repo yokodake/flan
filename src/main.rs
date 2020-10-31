@@ -14,8 +14,15 @@ fn main() {
         Ok(f) => f,
         Err(_) => {
             // @FIXME error handling
-            eprintln!("config failure.");
-            std::process::abort();
+            eprintln!("failed to read config file.");
+            std::process::exit(FAILURE);
+        }
+    };
+    let decisions = match opt.parse_decisions() {
+        Ok(decisions) => decisions,
+        Err(err) => {
+            eprintln!("arguments error: {}", err);
+            std::process::exit(FAILURE)
         }
     };
 
@@ -25,7 +32,6 @@ fn main() {
     let trees = parse_sources(sources, &mut h);
 
     // @TODO handle errors
-    let decisions = opt.parse_decisions().unwrap();
     let mut env = make_env(&config_file, decisions, &mut h).unwrap();
 
     if opt.query_dims {
@@ -47,6 +53,7 @@ fn main() {
         std::process::exit(SUCCESS)
     }
 
+    // @FIXME binary files aren't copied
     // @TODO driver::write_files
     for (source, tree) in trees {
         if write(source, &tree, &env).is_err() {

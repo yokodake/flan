@@ -246,7 +246,7 @@ use crate::utils::RelativeSeek;
 use std::io::{BufRead, Write};
 
 /// write the terms to `to`.
-/// `start` is the (starting) position in the Reader `from`
+/// `start` is the current (starting) position in the Reader `from`
 pub fn write_terms<R: RelativeSeek + BufRead>(
     terms: &Terms,
     from: &mut R,
@@ -258,7 +258,6 @@ pub fn write_terms<R: RelativeSeek + BufRead>(
     let mut pos = start;
     for t in terms {
         let off = t.span.lo.as_u64() - pos as u64;
-        debug!("{} + {}", pos, off);
         if off > i64::MAX as u64 {
             // i64::MAX is bigger than the buffer anyways
             from.seek(SeekFrom::Current(i64::MAX))?;
@@ -270,13 +269,11 @@ pub fn write_terms<R: RelativeSeek + BufRead>(
         // @TODO check how much has been written
         pos += off as usize;
         pos = write_term(t, from, to, pos, env)?;
-        debug!("= {}", pos);
     }
     Ok(pos)
 }
 
-/// writes one term to `to`.
-/// `start` is the (starting) position in the Reader `from`
+/// `start` is the current (starting) position in the `from` Reader
 pub fn write_term<R: RelativeSeek + BufRead>(
     term: &Term,
     from: &mut R,
@@ -313,20 +310,23 @@ pub fn write_term<R: RelativeSeek + BufRead>(
 
 /// helper to make a handler from cmdline ops and the configuration file.
 pub fn make_handler(opt: &cfg::Opt, cfg_file: &cfg::Config, srcmap: Arc<SrcMap>) -> Handler {
-    let eflags = override_flags(opt.error_flags(), cfg_file.options.as_ref());
+    let eflags = make_flags(opt, cfg_file.options.as_ref());
     Handler::new(eflags, srcmap)
 }
 
-/// @FIXME flags from cmd-line should override those from config, not the opposite!
-pub fn override_flags(flags: ErrorFlags, config: Option<&cfg::Options>) -> ErrorFlags {
-    let mut flags = flags;
-    if config.is_none() {
-        return flags;
-    }
-    let config = config.unwrap();
+/// cmd-line opts take precedence over config file. Otherwise use default values
+pub fn make_flags(opt: &cfg::Opt, config: Option<&cfg::Options>) -> ErrorFlags {
+    let report_level = opt
+        .report_level()
+        .or(config.and_then(|c| c.verbosity))
+        .unwrap_or(cfg::DEFAULT_VERBOSITY);
 
-    flags.report_level = config.verbosity.unwrap_or(flags.report_level);
-    flags
+    ErrorFlags {
+        report_level,
+        warn_as_error: opt.warn_error(),
+        no_extra: opt.no_extra(),
+        dry_run: opt.dry_run(),
+    }
 }
 
 /// get the config file from the current working directory if `None` is passed.
