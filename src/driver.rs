@@ -387,3 +387,14 @@ pub fn parse_sources(sources: Vec<SrcFile>, h: &mut Handler) -> Vec<(SrcFile, Te
     }
     trees
 }
+
+pub fn cleanup(paths: Vec<&Path>) {
+    for path in paths {
+        if path.exists() {
+            #[allow(unused_must_use)]
+            {
+                std::fs::remove_file(path);
+            }
+        }
+    }
+}

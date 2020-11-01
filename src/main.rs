@@ -1,5 +1,6 @@
 #![feature(type_ascription)]
 #![feature(option_result_contains)]
+#![feature(result_flattening)]
 use std::collections::HashMap;
 
 use flan::cfg::{Opt, StructOpt};
@@ -53,10 +54,20 @@ fn main() {
         std::process::exit(SUCCESS)
     }
 
+    let mut dests = vec![];
     // @FIXME binary files aren't copied
     // @TODO driver::write_files
-    for (source, tree) in trees {
-        if write(source, &tree, &env).is_err() {
+    for (source, tree) in &trees {
+        dests.push(source.destination.as_path());
+
+        let r: Result<(), _> = std::panic::catch_unwind(|| {
+            write(source.clone(), &tree, &env)
+                .map_err(|_| Box::new(()) as Box<dyn std::any::Any + Send>)
+        })
+        .flatten();
+
+        if r.is_err() {
+            cleanup(dests);
             std::process::exit(FAILURE);
         }
     }
