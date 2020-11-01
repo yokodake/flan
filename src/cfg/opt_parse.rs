@@ -4,45 +4,85 @@ use std::path::PathBuf;
 
 pub use structopt::StructOpt;
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum ErrorKind {
-    OutOfRange,
-    InvalidChoice,
-    InvalidIdentifier,
+#[derive(StructOpt, Clone, PartialEq, Eq, Debug)]
+#[structopt(version = "0.1", rename_all = "kebab-case")]
+pub struct Opt {
+    #[structopt(long)]
+    /// overwrite existing destination files
+    pub force: bool,
+    #[structopt(long)]
+    /// run without substituting the files.
+    pub dry_run: bool,
+    #[structopt(long)]
+    /// ignore all warnings
+    pub no_warn: bool,
+    #[structopt(short = "z", long)]
+    /// silence all errors and warnings
+    pub silence: bool,
+    #[structopt(short, long)]
+    /// explain what is being done
+    pub verbose: bool,
+    #[structopt(long = "Werror")]
+    /// make all warnings into errors (@TODO: handle this in handler)
+    pub warn_error: bool,
+    #[structopt(short = "q", long = "query-dimensions")]
+    /// list all dimensions (@TODO: that require a decision).
+    pub query_dims: bool,
+    #[structopt(name = "PATH", short = "c", long = "config")]
+    /// use this config file instead
+    pub config_file: Option<PathBuf>,
+    #[structopt(name = "OUTPUT", short = "o", long = "output", parse(from_os_str))]
+    /// destination file
+    pub file_out: Option<PathBuf>,
+    #[structopt(name = "INPUT", short = "i", long = "input", parse(from_os_str))]
+    /// source file
+    pub file_in: Option<PathBuf>,
+    #[structopt(name = "DECISIONS")]
+    /// Can be Choice or Dimension_name=Index pairs. An Index is either a
+    /// a choice name or a natural smaller than 128. Valid names contain `_` or alphanumeric chars but
+    /// cannot start with a digit
+    pub decisions: Vec<String>,
 }
-#[derive(Debug, Hash, PartialOrd, PartialEq)]
-pub struct Error {
-    pub msg: String,
-    pub kind: ErrorKind,
-}
-impl Error {
-    pub fn new(kind: ErrorKind, msg: String) -> Self {
-        Error { kind, msg }
-    }
-    pub fn out_of_range(lexeme: &str) -> Self {
-        Error { 
-            kind: ErrorKind::OutOfRange,
-            msg: format!("Numeric choice `{}` is out of range.\n note: consulte --help for a more detailed explanation.", lexeme)
+impl Opt {
+    pub fn parse_decisions(&self) -> Result<(HashSet<String>, HashMap<String, Index>), Error> {
+        let mut nc = HashSet::new();
+        let mut dc = HashMap::new();
+        for s in &self.decisions {
+            match OptDec::parse_decision(s)? {
+                OptDec::Name(s) => {
+                    nc.insert(s);
+                }
+                OptDec::WithDim(dname, idx) => {
+                    dc.insert(dname, idx);
+                }
+            }
         }
+        Ok((nc, dc))
     }
-    pub fn invalid_choice(lexeme: &str) -> Self {
-        Error { 
-            kind: ErrorKind::InvalidChoice,
-            msg: format!("`{}` is not a valid choice.\n note: consulte --help for a more detailed explanation.", lexeme),
+    pub fn report_level(&self) -> Option<u8> {
+        let mut report_level: Option<u8> = None;
+        if self.verbose {
+            report_level = Some(5);
         }
+        if self.no_warn {
+            report_level = Some(2);
+        }
+        if self.silence {
+            report_level = Some(0);
+        }
+        report_level
     }
-    pub fn invalid_identifier(lexeme: &str) -> Self {
-        Error {
-            kind: ErrorKind::InvalidIdentifier,
-            msg: format!("`{}` is not a valid identifier.\n note: consult --help for a more detailed explanation.", lexeme),
-        }
+    pub fn no_extra(&self) -> bool {
+        self.silence
+    }
+    pub fn dry_run(&self) -> bool {
+        self.dry_run
+    }
+    pub fn warn_error(&self) -> bool {
+        self.warn_error
     }
 }
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.msg)
-    }
-}
+
 #[derive(Hash, Debug, PartialEq)]
 /// command line passed Decision
 pub enum OptDec {
@@ -100,6 +140,7 @@ impl OptDec {
         }
     }
 }
+
 /// Decision for an explicitly named dimension
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum Index {
@@ -108,7 +149,6 @@ pub enum Index {
     /// by index
     Num(u8),
 }
-
 impl std::fmt::Display for Index {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -118,82 +158,43 @@ impl std::fmt::Display for Index {
     }
 }
 
-#[derive(StructOpt, Clone, PartialEq, Eq, Debug)]
-#[structopt(version = "0.1", rename_all = "kebab-case")]
-pub struct Opt {
-    #[structopt(long)]
-    /// overwrite existing destination files
-    pub force: bool,
-    #[structopt(long)]
-    /// run without substituting the files.
-    pub dry_run: bool,
-    #[structopt(long)]
-    /// ignore all warnings
-    pub no_warn: bool,
-    #[structopt(short = "z", long)]
-    /// silence all errors and warnings
-    pub silence: bool,
-    #[structopt(short, long)]
-    /// explain what is being done
-    pub verbose: bool,
-    #[structopt(long = "Werror")]
-    /// make all warnings into errors (@TODO: handle this in handler)
-    pub warn_error: bool,
-    #[structopt(short = "q", long = "query-dimensions")]
-    /// list all dimensions (@TODO: that require a decision).
-    pub query_dims: bool,
-    #[structopt(name = "PATH", short = "c", long = "config")]
-    /// use this config file instead
-    pub config_file: Option<PathBuf>,
-    #[structopt(name = "OUTPUT", short = "o", long = "output", parse(from_os_str))]
-    /// destination file
-    pub file_out: Option<PathBuf>,
-    #[structopt(name = "INPUT")]
-    /// source file
-    pub file_in: PathBuf,
-    #[structopt(name = "DECISIONS")]
-    /// Can be Choice or Dimension_name=Index pairs. An Index is either a
-    /// a choice name or a natural smaller than 128. Valid names contain `_` or alphanumeric chars but
-    /// cannot start with a digit
-    pub decisions: Vec<String>,
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub enum ErrorKind {
+    OutOfRange,
+    InvalidChoice,
+    InvalidIdentifier,
 }
-impl Opt {
-    pub fn parse_decisions(&self) -> Result<(HashSet<String>, HashMap<String, Index>), Error> {
-        let mut nc = HashSet::new();
-        let mut dc = HashMap::new();
-        for s in &self.decisions {
-            match OptDec::parse_decision(s)? {
-                OptDec::Name(s) => {
-                    nc.insert(s);
-                }
-                OptDec::WithDim(dname, idx) => {
-                    dc.insert(dname, idx);
-                }
-            }
-        }
-        Ok((nc, dc))
+#[derive(Debug, Hash, PartialOrd, PartialEq)]
+pub struct Error {
+    pub msg: String,
+    pub kind: ErrorKind,
+}
+impl Error {
+    pub fn new(kind: ErrorKind, msg: String) -> Self {
+        Error { kind, msg }
     }
-    pub fn report_level(&self) -> Option<u8> {
-        let mut report_level: Option<u8> = None;
-        if self.verbose {
-            report_level = Some(5);
+    pub fn out_of_range(lexeme: &str) -> Self {
+        Error { 
+            kind: ErrorKind::OutOfRange,
+            msg: format!("Numeric choice `{}` is out of range.\n note: consulte --help for a more detailed explanation.", lexeme)
         }
-        if self.no_warn {
-            report_level = Some(2);
+    }
+    pub fn invalid_choice(lexeme: &str) -> Self {
+        Error { 
+            kind: ErrorKind::InvalidChoice,
+            msg: format!("`{}` is not a valid choice.\n note: consulte --help for a more detailed explanation.", lexeme),
         }
-        if self.silence {
-            report_level = Some(0);
+    }
+    pub fn invalid_identifier(lexeme: &str) -> Self {
+        Error {
+            kind: ErrorKind::InvalidIdentifier,
+            msg: format!("`{}` is not a valid identifier.\n note: consult --help for a more detailed explanation.", lexeme),
         }
-        report_level
     }
-    pub fn no_extra(&self) -> bool {
-        self.silence
-    }
-    pub fn dry_run(&self) -> bool {
-        self.dry_run
-    }
-    pub fn warn_error(&self) -> bool {
-        self.warn_error
+}
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.msg)
     }
 }
 

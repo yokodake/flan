@@ -6,7 +6,6 @@ use std::{fs, io};
 
 use crate::cfg;
 use crate::cfg::Choices;
-use crate::debug;
 use crate::env::{Dim, Env};
 use crate::error::{ErrorBuilder, ErrorFlags, Handler};
 use crate::infer;
@@ -287,7 +286,6 @@ pub fn write_term<R: RelativeSeek + BufRead>(
             // safe alternative?
             let mut buf = unsafe { Box::<[u8]>::new_uninit_slice(term.span.len()).assume_init() };
             from.read(&mut buf)?;
-            debug!("{}", std::str::from_utf8(buf.as_ref()).unwrap());
             to.write(&buf)?;
             Ok(pos + term.span.len())
         }

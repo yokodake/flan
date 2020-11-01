@@ -4,10 +4,7 @@
 //! but I'm stil not sure whether copying should continue, stop or a rollback should occur.
 use std::sync::Arc;
 
-use crate::{
-    debug,
-    sourcemap::{Span, SrcFile, SrcMap},
-};
+use crate::sourcemap::{Span, SrcFile, SrcMap};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Debug, Hash)]
 pub struct Error {
@@ -119,7 +116,6 @@ impl Error {
         let mut buf = format!("{}: {}\n", self.level, self.msg);
         let mut alignment = 3;
 
-        debug!("err.span: {}", self.span);
         if src.is_some() {
             write!(buf, "in {}", src.as_ref().unwrap().path.display());
             if !self.span.is_nil() {
@@ -228,7 +224,7 @@ impl Handler {
         self.abort_now()
     }
     /// aborts without printing delayed errors
-    pub fn abort_now(&mut self) -> ! {
+    pub fn abort_now(&self) -> ! {
         if self.err_count > 1 {
             eprintln!("Aborting due to previous errors.");
         } else if self.err_count == 1 {
@@ -239,7 +235,12 @@ impl Handler {
         if cfg!(windows) {
             std::process::exit(0x100)
         } else {
-            std::process::exit(1)
+            std::process::exit(-1)
+        }
+    }
+    pub fn abort_if_err(&self) {
+        if self.err_count > 0 {
+            self.abort_now();
         }
     }
     /// prints all the delayed errors

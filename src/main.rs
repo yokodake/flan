@@ -13,27 +13,29 @@ fn main() {
     let opt = Opt::from_args();
     let config_file = match get_config(&opt.config_file) {
         Ok(f) => f,
-        Err(_) => {
+        Err(e) => {
             // @FIXME error handling
-            eprintln!("failed to read config file.");
+            eprintln!("fatal error: failed to read config file.");
+            eprintln!("{}", e);
             std::process::exit(FAILURE);
         }
     };
     let decisions = match opt.parse_decisions() {
         Ok(decisions) => decisions,
         Err(err) => {
-            eprintln!("arguments error: {}", err);
+            eprintln!("fatal error: arguments error: {}", err);
             std::process::exit(FAILURE)
         }
     };
 
     let (source_map, sources) = load_sources(config_file.paths());
 
-    let mut h = make_handler(&opt, &config_file, source_map.clone());
-    let trees = parse_sources(sources, &mut h);
+    let mut hp = make_handler(&opt, &config_file, source_map.clone());
+    let trees = parse_sources(sources, &mut hp);
 
     // @TODO handle errors
-    let mut env = make_env(&config_file, decisions, &mut h).unwrap();
+    let mut he = make_handler(&opt, &config_file, source_map.clone());
+    let mut env = make_env(&config_file, decisions, &mut he).unwrap();
 
     if opt.query_dims {
         for (_, tree) in &trees {
@@ -47,9 +49,10 @@ fn main() {
     } else if trees.iter().fold(false, |acc, (_, tree)| {
         infer::check(tree, &mut env).is_none() || acc
     }) {
-        h.abort();
+        he.abort();
     }
 
+    hp.abort_if_err();
     if opt.query_dims || opt.dry_run {
         std::process::exit(SUCCESS)
     }
@@ -67,6 +70,7 @@ fn main() {
         .flatten();
 
         if r.is_err() {
+            eprintln!("Failed to write. Cleanup.");
             cleanup(dests);
             std::process::exit(FAILURE);
         }
@@ -74,4 +78,4 @@ fn main() {
 }
 
 const SUCCESS: i32 = 0;
-const FAILURE: i32 = -1;
+const FAILURE: i32 = 0x100;

@@ -1,5 +1,8 @@
 /target
 \#*\#
-foo.test
-foo
 .vscode/settings.json
+
+.flan
+foo.test
+foo.out
+foo

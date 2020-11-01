@@ -1,4 +1,3 @@
-use crate::debug;
 use std::io::Result;
 use std::path::{Path, PathBuf};
 
@@ -29,7 +28,6 @@ pub fn normalize_path<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
     }
     // rest of path
     for it in its {
-        debug!("{:?}", normal);
         depth = if normal.symlink_metadata()?.file_type().is_symlink() {
             0
         } else {
