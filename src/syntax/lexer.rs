@@ -87,15 +87,14 @@ impl<'a> Lexer<'a> {
     }
     /// lexes the next token
     pub fn next_token(&mut self) -> Token {
-        let start = self.pos;
+        let mut start = self.pos;
         match self.current {
             None => return Spanned::new(EOF, start, self.pos),
-            // @FIXME make 2 Text spans, ignoring the `\\`
             Some('\\') => match self.peek0() {
-                '#' | '}' => {
-                    self.bump(); // eat '\'
-                    self.bump(); // eat escaped char
-                    return self.next_token();
+                '#' | '}' | '\\' => {
+                    // we ignore the `\`, by updating `start` after eating it
+                    self.bump();
+                    start = self.pos;
                 }
                 _ => {}
             },
@@ -135,14 +134,14 @@ impl<'a> Lexer<'a> {
                     c if Self::is_varstart(c) => return self.lex_txt(start), // can we avoid this
                     _ => continue,
                 },
+                '\\' => {
+                    return self.lex_txt(start);
+                }
+                // an escape is a meaningful token because we want 2 differnet text spans
                 '}' => {
                     if self.peek0() == '#' {
                         return self.lex_txt(start);
                     }
-                }
-                '\\' => {
-                    self.bump(); // eat '\'
-                    continue; // ignore escaped
                 }
                 _ => continue,
             }

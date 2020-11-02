@@ -1,61 +1,9 @@
 use flan::error::{ErrorFlags, Handler};
-use flan::sourcemap::{Spanned, SrcMap};
+use flan::sourcemap::SrcMap;
 use flan::syntax::lexer::{Token, TokenK};
-use flan::syntax::{Parsed, TermK, Terms};
 
-type Kinds = Vec<Kind>;
-#[derive(Clone, PartialEq, Debug)]
-enum Kind {
-    /// Text
-    Txt,
-    /// variable
-    Var(String),
-    /// dimension name
-    Dim(String, Vec<Kinds>),
-}
-fn get_kinds(ts: Terms) -> Kinds {
-    use Kind::*;
-    let mut v = Vec::new();
-    for Spanned { node, span: _ } in ts {
-        match node {
-            TermK::Text => v.push(Txt),
-            TermK::Var(n) => v.push(Var(n)),
-            TermK::Dimension { name, children } => {
-                let mut cs = Vec::new();
-                for c in children {
-                    cs.push(get_kinds(c));
-                }
-                v.push(Dim(name, cs))
-            }
-        }
-    }
-    v
-}
-fn parse_str(src: &str) -> Parsed<Terms> {
-    use flan::driver::string_to_parser;
-    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
-    let p = string_to_parser(&mut h, src.into());
-    assert!(p.is_some());
-    p.unwrap().parse()
-}
-fn lex_str(src: &str) -> Vec<TokenK> {
-    use flan::driver::source_to_stream;
-    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
-    let s = source_to_stream(&mut h, src);
-    assert!(s.is_some());
-    s.unwrap().iter().map(|t| t.node).collect()
-}
-fn stream_str(src: &str) -> Vec<Token> {
-    use flan::driver::source_to_stream;
-    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
-    let s = source_to_stream(&mut h, src);
-    assert!(s.is_some());
-    let mut v = Vec::new();
-    for &t in s.unwrap().iter() {
-        v.push(t)
-    }
-    v
-}
+mod utils;
+use utils::*;
 
 #[test]
 fn unnested_seps() {
@@ -88,6 +36,24 @@ fn escaped_vars() {
     let mut ts = lex_str(src);
     assert_eq!(EOF, ts.remove(ts.len() - 1));
     assert!(ts.iter().all(|k| k == &Text));
+}
+#[test]
+fn multi_escapes() {
+    use flan::driver::source_to_stream;
+    use TokenK::*;
+    let src = "foo \\#$foo# \\\\ ...";
+
+    let mut h = Handler::new(ErrorFlags::default(), SrcMap::new());
+    let actual = source_to_stream(&mut h, src);
+    assert!(actual.is_some());
+    let actual: Vec<Token> = actual.unwrap().into_iter().collect();
+    let expected = vec![
+        Token::new(Text, 0, 3),
+        Token::new(Text, 5, 11),
+        Token::new(Text, 13, 17),
+        Token::new(EOF, 18, 18),
+    ];
+    assert_eq!(expected, actual);
 }
 #[test]
 fn lex_vars() {
@@ -225,6 +191,34 @@ fn one_sepd_span() {
         Token::new_lit(Sepd, 3, 4),
         Token::new_lit(Closed, 5, 6),
         Token::new_lit(EOF, src.len(), src.len()),
+    ];
+    assert_eq!(expected, toks);
+}
+
+#[test]
+fn escape_at_end() {
+    use flan::syntax::lexer::Token;
+    use TokenK::*;
+    let src = r#"{...\}"#;
+    let toks = stream_str(src);
+    let expected = vec![
+        Token::new(Text, 0, 3),
+        Token::new(Text, 5, 5),
+        Token::new(EOF, src.len(), src.len()),
+    ];
+    assert_eq!(expected, toks);
+}
+#[test]
+fn one_char_txt() {
+    use flan::syntax::lexer::Token;
+    use TokenK::*;
+    let src = ".#$foo#.";
+    let toks = stream_str(src);
+    let expected = vec![
+        Token::new(Text, 0, 0),
+        Token::new(Var, 1, 6),
+        Token::new(Text, 7, 7),
+        Token::new(EOF, src.len(), src.len()),
     ];
     assert_eq!(expected, toks);
 }
