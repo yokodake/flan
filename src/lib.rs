@@ -8,8 +8,6 @@
 )]
 
 pub mod cfg;
-#[doc(inline)]
-pub use cfg::opt_parse;
 
 pub mod driver;
 

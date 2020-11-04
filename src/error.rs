@@ -182,10 +182,6 @@ pub struct ErrorFlags {
     pub warn_as_error: bool,
     /// do not print extra notes & suggestions
     pub no_extra: bool,
-    /// don't process files, only parse and typecheck them  
-    /// @NOTE instead of calling `infer::collect` we could just typecheck
-    ///       and emit all variables/dimensions present in the environment
-    pub dry_run: bool,
 }
 impl Default for ErrorFlags {
     fn default() -> Self {
@@ -193,7 +189,6 @@ impl Default for ErrorFlags {
             report_level: 5,
             warn_as_error: false,
             no_extra: false,
-            dry_run: false,
         }
     }
 }

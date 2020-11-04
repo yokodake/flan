@@ -6,29 +6,27 @@ use std::{fs, io};
 
 use crate::cfg;
 use crate::cfg::Choices;
+use crate::cfg::Index;
 use crate::env::{Dim, Env};
 use crate::error::{ErrorBuilder, ErrorFlags, Handler};
 use crate::infer;
-use crate::opt_parse::Index;
 use crate::sourcemap::{SrcFile, SrcMap};
 use crate::syntax::*;
 
 /// helper to make an env from config file (`variables` and `decl_dim`) and cmd line options
 /// (`chs` and `idxs`)
-pub fn make_env<'a>(
-    config_file: &cfg::Config,
-    (names, idxs): (HashSet<String>, HashMap<String, Index>), // decisions
-    handler: &'a mut Handler,
-) -> Option<Env<'a>> {
-    let variables = config_file.variables_cloned();
-    let decl_dim = config_file.dimensions_cloned();
+pub fn make_env<'a>(config: &cfg::Config, handler: &'a mut Handler) -> Option<Env<'a>> {
+    let variables = config.variables.clone();
+    let decl_dim = config.dimensions.clone();
+    let names = &config.decisions_name;
+    let pairs = &config.decisions_pair;
 
     let mut dimensions = HashMap::new();
     let mut errors = 0;
     for (dn, chs) in decl_dim {
         let r = match chs {
-            Choices::Names(ons) => handle_named(&dn, ons, &names, &idxs, handler),
-            Choices::Size(i) => handle_sized(&dn, i, &idxs, handler),
+            Choices::Names(ons) => handle_named(&dn, ons, names, pairs, handler),
+            Choices::Size(i) => handle_sized(&dn, i, pairs, handler),
         };
         match r {
             Ok(dim) => {
@@ -48,7 +46,8 @@ pub fn make_env<'a>(
     if errors == 0 {
         // add idxs left to env
         let mut env = Env::new(HashMap::from_iter(variables), dimensions, handler);
-        fill_env(idxs, &mut env);
+        // @SPEEDUP don't clone
+        fill_env(pairs.clone(), &mut env);
         return Some(env);
     }
     handler.print_all();
@@ -212,7 +211,7 @@ pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> Option<Parser<
 }
 
 /// wrapper around [`infer::collect`].
-/// see [`cfg::Opt::query_dims`] cmd-arg option
+/// see [`cfg::opts::Opt::query_dims`]
 pub fn collect_dims<'a>(
     terms: &Terms,
     h: &mut Handler,
@@ -307,40 +306,8 @@ pub fn write_term<R: RelativeSeek + BufRead>(
 }
 
 /// helper to make a handler from cmdline ops and the configuration file.
-pub fn make_handler(opt: &cfg::Opt, cfg_file: &cfg::Config, srcmap: Arc<SrcMap>) -> Handler {
-    let eflags = make_flags(opt, cfg_file.options.as_ref());
+pub fn make_handler(eflags: ErrorFlags, srcmap: Arc<SrcMap>) -> Handler {
     Handler::new(eflags, srcmap)
-}
-
-/// cmd-line opts take precedence over config file. Otherwise use default values
-pub fn make_flags(opt: &cfg::Opt, config: Option<&cfg::Options>) -> ErrorFlags {
-    let report_level = opt
-        .report_level()
-        .or(config.and_then(|c| c.verbosity))
-        .unwrap_or(cfg::DEFAULT_VERBOSITY);
-
-    ErrorFlags {
-        report_level,
-        warn_as_error: opt.warn_error(),
-        no_extra: opt.no_extra(),
-        dry_run: opt.dry_run(),
-    }
-}
-
-/// get the config file from the current working directory if `None` is passed.
-/// returns a default config if `.flan` doesn't exist.
-/// see [`cfg::path_to_cfg`]
-pub fn get_config(config_path: &Option<PathBuf>) -> Result<cfg::Config, cfg::Error> {
-    match config_path {
-        Some(ref path) => cfg::path_to_cfg(path.clone()),
-        None => {
-            if Path::new(".flan").exists() {
-                cfg::path_to_cfg(".flan")
-            } else {
-                Ok(cfg::Config::default())
-            }
-        }
-    }
 }
 
 /// load all the sources in the source map and returns them in a `Vec`

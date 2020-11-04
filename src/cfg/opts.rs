@@ -2,6 +2,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+use super::Error;
 pub use structopt::StructOpt;
 
 #[derive(StructOpt, Clone, PartialEq, Eq, Debug)]
@@ -31,12 +32,12 @@ pub struct Opt {
     #[structopt(name = "PATH", short = "c", long = "config")]
     /// use this config file instead
     pub config_file: Option<PathBuf>,
-    #[structopt(name = "OUTPUT", short = "o", long = "output", parse(from_os_str))]
-    /// destination file
-    pub file_out: Option<PathBuf>,
-    #[structopt(name = "INPUT", short = "i", long = "input", parse(from_os_str))]
-    /// source file
-    pub file_in: Option<PathBuf>,
+    #[structopt(name = "OUTPATH", short = "o", long = "out-prefix", parse(from_os_str))]
+    /// destination path
+    pub out_prefix: Option<PathBuf>,
+    #[structopt(name = "INPATH", short = "i", long = "in-prefix", parse(from_os_str))]
+    /// source path
+    pub in_prefix: Option<PathBuf>,
     #[structopt(name = "DECISIONS")]
     /// Can be Choice or Dimension_name=Index pairs. An Index is either a
     /// a choice name or a natural smaller than 128. Valid names contain `_` or alphanumeric chars but
@@ -48,11 +49,11 @@ impl Opt {
         let mut nc = HashSet::new();
         let mut dc = HashMap::new();
         for s in &self.decisions {
-            match OptDec::parse_decision(s)? {
-                OptDec::Name(s) => {
+            match Decision::from_str(s)? {
+                Decision::Name(s) => {
                     nc.insert(s);
                 }
-                OptDec::WithDim(dname, idx) => {
+                Decision::WithDim(dname, idx) => {
                     dc.insert(dname, idx);
                 }
             }
@@ -83,17 +84,17 @@ impl Opt {
     }
 }
 
-#[derive(Hash, Debug, PartialEq)]
+#[derive(Hash, Debug, PartialEq, Clone)]
 /// command line passed Decision
-pub enum OptDec {
+pub enum Decision {
     /// by name
     Name(String),
     /// (dimension name, decision index or name) pair.
     WithDim(String, Index),
 }
-impl OptDec {
+impl Decision {
     /// parse one decision
-    pub fn parse_decision<Str: AsRef<str>>(str: &Str) -> Result<Self, Error> {
+    pub fn from_str<Str: AsRef<str>>(str: &Str) -> Result<Self, Error> {
         let mut it = str.as_ref().splitn(2, '=');
         // splitn will give us at the very least "" as first elem
         let k = it.next().unwrap().trim();
@@ -103,13 +104,13 @@ impl OptDec {
             None => Self::parse_name(k),
         }
     }
-    /// [`OptDec::WithDim`]
+    /// [`Decision::WithDim`]
     fn parse_dim(k: &str, i: &str) -> Result<Self, Error> {
         Self::validate_id(k)?;
         let idx = Self::parse_idx(i)?;
         Ok(Self::WithDim(k.into(), idx))
     }
-    /// [`OptDec::Name`]
+    /// [`Decision::Name`]
     fn parse_name(n: &str) -> Result<Self, Error> {
         Self::validate_id(n)?;
         Ok(Self::Name(n.into()))
@@ -119,7 +120,7 @@ impl OptDec {
         use std::num::IntErrorKind;
         return match s.parse() {
             Ok(i) if i < 128 => Ok(Index::Num(i)),
-            Err(e) if  *e.kind() == IntErrorKind::Overflow => Err(Error::out_of_range(s)),
+            Err(e) if *e.kind() == IntErrorKind::Overflow => Err(Error::out_of_range(s)),
             _ => {
                 if Self::validate_id(s).is_ok() {
                     Ok(Index::Name(s.into()))
@@ -157,46 +158,3 @@ impl std::fmt::Display for Index {
         }
     }
 }
-
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum ErrorKind {
-    OutOfRange,
-    InvalidChoice,
-    InvalidIdentifier,
-}
-#[derive(Debug, Hash, PartialOrd, PartialEq)]
-pub struct Error {
-    pub msg: String,
-    pub kind: ErrorKind,
-}
-impl Error {
-    pub fn new(kind: ErrorKind, msg: String) -> Self {
-        Error { kind, msg }
-    }
-    pub fn out_of_range(lexeme: &str) -> Self {
-        Error { 
-            kind: ErrorKind::OutOfRange,
-            msg: format!("Numeric choice `{}` is out of range.\n note: consulte --help for a more detailed explanation.", lexeme)
-        }
-    }
-    pub fn invalid_choice(lexeme: &str) -> Self {
-        Error { 
-            kind: ErrorKind::InvalidChoice,
-            msg: format!("`{}` is not a valid choice.\n note: consulte --help for a more detailed explanation.", lexeme),
-        }
-    }
-    pub fn invalid_identifier(lexeme: &str) -> Self {
-        Error {
-            kind: ErrorKind::InvalidIdentifier,
-            msg: format!("`{}` is not a valid identifier.\n note: consult --help for a more detailed explanation.", lexeme),
-        }
-    }
-}
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.msg)
-    }
-}
-
-/// see [`ErrorFlags::report_level`]
-pub const DEFAULT_VERBOSITY: u8 = 4;

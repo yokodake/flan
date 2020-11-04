@@ -1,5 +1,4 @@
 use flan::cfg::*;
-use flan::opt_parse::{Index, OptDec};
 
 #[test]
 fn invalid_size_choice() {
@@ -22,27 +21,27 @@ fn dups_decisions() {
 
 #[test]
 fn invalid_id() {
-    assert!(OptDec::parse_decision(&"6ajaofjo").is_err());
-    assert!(OptDec::parse_decision(&"+ajaofjo").is_err());
+    assert!(Decision::from_str(&"6ajaofjo").is_err());
+    assert!(Decision::from_str(&"+ajaofjo").is_err());
 }
 
 #[test]
 fn valid_id() {
-    let expected = OptDec::Name("_aja3791o_fjo8319".into());
-    let actual = opt_parse::OptDec::parse_decision(&"_aja3791o_fjo8319");
+    let expected = Decision::Name("_aja3791o_fjo8319".into());
+    let actual = Decision::from_str(&"_aja3791o_fjo8319");
     assert!(actual.is_ok());
     assert_eq!(expected, actual.unwrap());
 }
 
 #[test]
 fn valid_dim() {
-    let expected = OptDec::WithDim("foo".into(), Index::Num(0));
-    let actual = OptDec::parse_decision(&"foo=0");
+    let expected = Decision::WithDim("foo".into(), Index::Num(0));
+    let actual = Decision::from_str(&"foo=0");
     assert!(actual.is_ok());
     assert_eq!(expected, actual.unwrap());
 
-    let expected = OptDec::WithDim("foo".into(), Index::Name("bar".into()));
-    let actual = OptDec::parse_decision(&"foo=bar");
+    let expected = Decision::WithDim("foo".into(), Index::Name("bar".into()));
+    let actual = Decision::from_str(&"foo=bar");
     assert!(actual.is_ok());
     assert_eq!(expected, actual.unwrap());
 }

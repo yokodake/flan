@@ -1,50 +1,38 @@
 #![feature(type_ascription)]
 #![feature(option_result_contains)]
 #![feature(result_flattening)]
-use std::collections::HashMap;
 
-use flan::cfg::{Opt, StructOpt};
+use flan::cfg;
+use flan::cfg::Command;
 #[allow(unused_imports)]
 use flan::debug;
 use flan::infer;
 
 fn main() {
     use flan::driver::*;
-    let opt = Opt::from_args();
-    let config_file = match get_config(&opt.config_file) {
+    let (flags, config) = match cfg::new() {
         Ok(f) => f,
         Err(e) => {
             // @FIXME error handling
-            eprintln!("fatal error: failed to read config file.");
+            eprintln!("fatal error:");
             eprintln!("{}", e);
             std::process::exit(FAILURE);
         }
     };
-    let decisions = match opt.parse_decisions() {
-        Ok(decisions) => decisions,
-        Err(err) => {
-            eprintln!("fatal error: arguments error: {}", err);
-            std::process::exit(FAILURE)
-        }
-    };
 
-    let (source_map, sources) = load_sources(config_file.paths());
+    let (source_map, sources) = load_sources(config.paths.iter());
 
-    let mut hp = make_handler(&opt, &config_file, source_map.clone());
+    let mut hp = make_handler(flags.eflags, source_map.clone());
     let trees = parse_sources(sources, &mut hp);
 
     // @TODO handle errors
-    let mut he = make_handler(&opt, &config_file, source_map.clone());
-    let mut env = make_env(&config_file, decisions, &mut he).unwrap();
+    let mut he = make_handler(flags.eflags, source_map.clone());
+    let mut env = make_env(&config, &mut he).unwrap();
 
-    if opt.query_dims {
+    if flags.command == Command::Query {
         for (_, tree) in &trees {
-            let mut h = make_handler(&opt, &config_file, source_map.clone());
-            collect_dims(
-                tree,
-                &mut h,
-                config_file.dimensions.as_ref().unwrap_or(&HashMap::new()),
-            );
+            let mut h = make_handler(flags.eflags, source_map.clone());
+            collect_dims(tree, &mut h, &config.dimensions);
         }
     } else if trees.iter().fold(false, |acc, (_, tree)| {
         infer::check(tree, &mut env).is_none() || acc
@@ -53,7 +41,7 @@ fn main() {
     }
 
     hp.abort_if_err();
-    if opt.query_dims || opt.dry_run {
+    if flags.command == Command::Query || flags.command == Command::Query {
         std::process::exit(SUCCESS)
     }
 
