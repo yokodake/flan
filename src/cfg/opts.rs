@@ -26,6 +26,9 @@ pub struct Opt {
     #[structopt(long = "Werror")]
     /// make all warnings into errors
     pub warn_error: bool,
+    #[structopt(long = "ignore-unset")]
+    /// ignore unset variables: don't fail.
+    pub ignore_unset: bool,
     #[structopt(short = "q", long = "query-dimensions")]
     /// list all dimensions
     pub query_dims: bool,

@@ -164,7 +164,7 @@ impl<'a> Lexer<'a> {
         Token::new(Text, start, self.pos - 1)
     }
     pub fn lex_var(&mut self, start: Pos) -> Token {
-        let mut err = false;
+        let mut ill_char = false;
 
         self.bump(); // eat '#'
         self.bump(); // eat '$'
@@ -183,16 +183,15 @@ impl<'a> Lexer<'a> {
                     .print();
                 // return a wrong Var token, consumer of the TokenStream should check errors
                 return Token::new(Var, start, self.pos);
-            } else if !err {
+            } else if !ill_char {
                 // if we get none-whitespace illegal characters, and the variable token is still correctly terminated
-                // we can recover, maybe
+                // we can continue parsing
                 self.handler
-                    // @FIXME illegal characters aren't fatal lexer errors ?
                     .error(format!("Unexpected `{}` in variable name.", c).as_ref())
                     .with_span(span(self.pos, self.pos))
                     .note(Self::identifier_note().as_ref())
                     .print();
-                err = true;
+                ill_char = true;
             }
         }
         self.handler

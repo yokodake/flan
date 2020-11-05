@@ -58,6 +58,12 @@ pub struct Options {
     ///
     /// [`error::ErrorFlags`]: ../error/struct.ErrorFlags.html
     pub verbosity: Option<u8>,
+    /// ignore unset variables
+    pub ignore_unset: Option<bool>,
+    /// prefix for all the relative source files
+    pub in_prefix: Option<PathBuf>,
+    /// prefix for all the relative destination files
+    pub out_prefix: Option<PathBuf>,
 }
 impl Options {
     pub fn force(&self) -> Option<bool> {
@@ -66,7 +72,15 @@ impl Options {
     pub fn verbosity(&self) -> Option<u8> {
         self.verbosity
     }
-}
+    pub fn ignore_unset(&self) -> Option<bool> {
+        self.ignore_unset
+    }
+    pub fn in_prefix(&self) -> Option<&PathBuf> {
+        self.in_prefix.as_ref()
+    }
+    pub fn out_prefix(&self) -> Option<&PathBuf> {
+        self.out_prefix.as_ref()
+    }
 }
 
 /// dimension Declarations.  

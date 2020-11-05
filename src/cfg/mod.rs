@@ -40,7 +40,6 @@ pub struct Config {
     pub decisions_pair: HashMap<String, Index>,
 }
 impl Config {
-    /// @FIXME decisions
     pub fn new(
         decisions_name: HashSet<String>,
         decisions_pair: HashMap<String, Index>,
@@ -68,6 +67,8 @@ pub struct Flags {
     pub out_prefix: Option<PathBuf>,
     /// `--force`
     pub force: bool,
+    /// `--ignore-unset`
+    pub ignore_unset: bool,
     /// `--dry-run` or `--query-dimensions`
     pub command: Command,
 }
@@ -75,29 +76,54 @@ pub struct Flags {
 impl Flags {
     /// cmd-line opts take precedence over config file. Otherwise use default values
     pub fn new(opt: &Opt, config: Option<&file::Options>) -> Self {
-        let report_level = opt
-            .report_level()
-            .or(config.and_then(file::Options::verbosity))
-            .unwrap_or(VERBOSITY_DEFAULT);
-
+        let report_level = Self::make_flag(
+            opt.report_level(),
+            config.and_then(file::Options::verbosity),
+            VERBOSITY_DEFAULT,
+        );
         let eflags = ErrorFlags {
             report_level,
             warn_as_error: opt.warn_error(),
             no_extra: opt.no_extra(),
         };
 
-        let force = opt.force
-            || config
-                .and_then(file::Options::force)
-                .unwrap_or(FORCE_DEFAULT);
+        let force = Self::make_bflag(
+            opt.force,
+            config.and_then(file::Options::force),
+            FORCE_DEFAULT,
+        );
+        let ignore_unset = Self::make_bflag(
+            opt.ignore_unset,
+            config.and_then(file::Options::ignore_unset),
+            IGNORE_UNSET_DEFAULT,
+        );
         let command = Command::from_opt(&opt);
+
+        let in_prefix = opt
+            .in_prefix
+            .as_ref()
+            .or(config.and_then(file::Options::in_prefix))
+            .cloned();
+        let out_prefix = opt
+            .out_prefix
+            .as_ref()
+            .or(config.and_then(file::Options::out_prefix))
+            .cloned();
+
         Flags {
             eflags,
-            in_prefix: opt.in_prefix.clone(),
-            out_prefix: opt.out_prefix.clone(),
+            in_prefix,
+            out_prefix,
             force,
+            ignore_unset,
             command,
         }
+    }
+    fn make_flag<T>(opt: Option<T>, cfg: Option<T>, default: T) -> T {
+        opt.or(cfg).unwrap_or(default)
+    }
+    fn make_bflag(opt: bool, cfg: Option<bool>, default: bool) -> bool {
+        opt || cfg.unwrap_or(default)
     }
 }
 

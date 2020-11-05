@@ -179,9 +179,17 @@ pub fn fill_env(decisions: HashMap<String, Index>, env: &mut Env) {
 // syntax
 
 /// Does not fail, only report. Caller should check if all sources passed yielded Terms
-pub fn parse_sources(sources: Vec<SrcFile>, h: &mut Handler) -> Vec<(SrcFile, Terms)> {
+pub fn parse_sources(
+    sources: Vec<SrcFile>,
+    h: &mut Handler,
+) -> (Vec<(SrcFile, Terms)>, Vec<SrcFile>) {
+    let mut bins = vec![];
     let mut trees = vec![];
     for f in sources {
+        if f.is_binary() {
+            bins.push(f);
+            continue;
+        }
         match file_to_parser(h, f.clone()) {
             Some(mut p) => match p.parse() {
                 Ok(tree) => {
@@ -197,7 +205,7 @@ pub fn parse_sources(sources: Vec<SrcFile>, h: &mut Handler) -> Vec<(SrcFile, Te
             }
         }
     }
-    trees
+    (trees, bins)
 }
 
 /// transform a source into a [`TokenStream`]
@@ -253,14 +261,19 @@ pub fn collect_dims<'a>(
 
 // output
 
-/// @FIXME pass flags (overriding) and handle escapes  
-/// @FIXME handle escaped values  
 /// @TODO we could benefit from [`Write::write_vectored`]  
 /// @TODO modify Terms with the decision during typechecking so we don't have to search in env?  
 /// processes and writes to the destination file.
-pub fn write(file: SrcFile, terms: &Terms, env: &Env) -> io::Result<()> {
+pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io::Result<()> {
     let in_f = fs::File::open(&file.path)?;
     let mut reader = io::BufReader::new(in_f);
+    if !flags.force && file.destination.exists() {
+        let msg = format!(
+            "error: file `{}` already exists. [use --force to overwrite]",
+            file.destination.display()
+        );
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, msg));
+    }
     let mut out_f = fs::File::create(&file.destination)?;
     write_terms(terms, &mut reader, &mut out_f, file.start.as_usize(), env)?;
     Ok(())
@@ -332,7 +345,15 @@ pub fn write_term<R: RelativeSeek + BufRead>(
     }
 }
 
-pub fn cleanup(paths: Vec<&Path>) {
+pub fn copy_bin(flags: &cfg::Flags, file: SrcFile) -> io::Result<()> {
+    if !flags.force && file.destination.exists() {
+        return Ok(());
+    }
+    fs::copy(&file.path, &file.destination)?;
+    Ok(())
+}
+
+pub fn clean(paths: Vec<&Path>) {
     for path in paths {
         if path.exists() {
             #[allow(unused_must_use)]
@@ -347,18 +368,21 @@ pub fn cleanup(paths: Vec<&Path>) {
 
 /// load all the sources in the source map and returns them in a `Vec`
 pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
+    flags: &cfg::Flags,
     paths: It,
 ) -> (Arc<SrcMap>, Vec<SrcFile>) {
     let source_map = SrcMap::new();
     let mut sources = vec![];
-    for (src, dst) in paths {
+    let inp = flags.in_prefix.as_ref();
+    for (src_, dst_) in paths {
+        let src = inp.map(|p| p.join(src_)).unwrap_or(src_.clone());
+        let dst = inp.map(|p| p.join(dst_)).unwrap_or(dst_.clone());
         if src.is_dir() {
-            // @TODO traverse and collect files
-            panic!("directories not supported yet...")
+            panic!("@TODO: directories not supported yet...")
         } else {
-            match source_map.load_file(src.clone(), dst.clone()) {
-                // @FIXME error handling
-                Err(e) => eprintln!("couldn't load `{}`:\n {}", src.to_string_lossy(), e),
+            match source_map.load_file(src, dst) {
+                // @IMPROVEMENT error handling
+                Err(e) => eprintln!("couldn't load `{}`:\n {}", src_.to_string_lossy(), e),
                 Ok(f) => sources.push(f.clone()),
             }
         }

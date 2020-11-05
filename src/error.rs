@@ -261,7 +261,6 @@ impl Handler {
     /// }
     /// ```
     fn print_explicit(flags: &ErrorFlags, sources: &SrcMap, err: Error) {
-        // @FIXME better error formatting with source files
         if flags.report_level >= err.level.as_u8() {
             println!("{}", err.render(sources.lookup_source(err.span.lo)));
         }
@@ -356,18 +355,14 @@ impl<'a> ErrorBuilder<'a> {
         self
     }
     /// consumes the builder and prints an error
-    pub fn print(mut self) {
-        let e = self.mk_error();
-        self.handler.print(e)
+    pub fn print(self) {
+        let (e, h) = self.create();
+        h.print(e)
     }
     /// consumes the builder and delays error reporting in the handler
-    pub fn delay(mut self) {
-        let e = self.mk_error();
-        self.handler.delay(e)
-    }
-    /// consumes the builder, delay error reporting, and return a reference to it
-    pub fn create(mut self) -> Error {
-        self.mk_error()
+    pub fn delay(self) {
+        let (e, h) = self.create();
+        h.delay(e)
     }
 
     fn add_extra(&mut self, msg: String) {
@@ -379,24 +374,24 @@ impl<'a> ErrorBuilder<'a> {
         }
         self.messages.push(msg);
     }
-    // FIXME consume the builder
-    fn mk_error(&mut self) -> Error {
-        let mut messages = Vec::new();
-        std::mem::swap(&mut messages, &mut self.messages);
-        let m = match messages.len() {
+    /// consume the builder to generate and error and return a Handler ref
+    fn create(mut self) -> (Error, &'a mut Handler) {
+        let m = match self.messages.len() {
             0 => String::from(""),
-            1 => messages.pop().unwrap(),
-            _ => messages.swap_remove(0),
+            1 => self.messages.pop().unwrap(),
+            _ => self.messages.swap_remove(0),
         };
 
-        Error {
-            level: self.level,
-            msg: m,
-            extra: messages,
-            span: self.span.unwrap_or(Span::NIL),
-            // @FIXME
-            at_span: self.at_span.clone().unwrap_or(String::from("")),
-        }
+        (
+            Error {
+                level: self.level,
+                msg: m,
+                extra: self.messages,
+                span: self.span.unwrap_or(Span::NIL),
+                at_span: self.at_span.unwrap_or(String::from("")),
+            },
+            self.handler,
+        )
     }
 
     pub fn is_error(&self) -> bool {

@@ -26,7 +26,7 @@ use crate::syntax::Error;
 pub type Parsed<T> = Result<T, Error>;
 
 pub struct Parser<'a> {
-    // @FIXME remove mut
+    // @FIXME can we remove mut
     pub handler: &'a mut Handler,
     pub current_token: Token,
     pub tokens: TokenStream,
@@ -89,7 +89,6 @@ impl Parser<'_> {
                                 .as_ref(),
                             )
                             .with_span(self.current_token.span)
-                            // @FIXME .with_kind(Error::UnexpectedToken)
                             .delay();
                         return Err(Error::UnexpectedToken);
                     } else if k == TokenK::Closed {
@@ -159,7 +158,6 @@ impl Parser<'_> {
                         .error("Unclosed dimension delimiter. Expected `}#`.")
                         .with_span(start)
                         .at_span("dimension starts here")
-                        // @FIXME .with_kind(Error::UnclosedDelimiter)
                         .delay();
                     return Err(Error::UnclosedDelimiter);
                 }

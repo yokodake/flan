@@ -13,17 +13,17 @@ fn main() {
     let (flags, config) = match make_cfgflags() {
         Ok(f) => f,
         Err(e) => {
-            // @FIXME error handling
+            // @IMPROVEMENT error handling
             eprintln!("fatal error:");
             eprintln!("{}", e);
             std::process::exit(FAILURE);
         }
     };
 
-    let (source_map, sources) = load_sources(config.paths.iter());
+    let (source_map, sources) = load_sources(&flags, config.paths.iter());
 
     let mut hp = Handler::new(flags.eflags, source_map.clone());
-    let trees = parse_sources(sources, &mut hp);
+    let (trees, bins) = parse_sources(sources, &mut hp);
 
     // @TODO handle errors
     let mut he = Handler::new(flags.eflags, source_map.clone());
@@ -45,22 +45,19 @@ fn main() {
         std::process::exit(SUCCESS)
     }
 
-    let mut dests = vec![];
-    // @FIXME binary files aren't copied
     // @TODO driver::write_files
     for (source, tree) in &trees {
-        dests.push(source.destination.as_path());
-
-        let r: Result<(), _> = std::panic::catch_unwind(|| {
-            write(source.clone(), &tree, &env)
-                .map_err(|_| Box::new(()) as Box<dyn std::any::Any + Send>)
-        })
-        .flatten();
-
-        if r.is_err() {
-            eprintln!("Failed to write. Cleanup.");
-            cleanup(dests);
-            std::process::exit(FAILURE);
+        // @IMPROVEMENT run in a different thread and check exitcode, instead
+        //              of catch_unwind to do cleanup.
+        match write(&flags, source.clone(), &tree, &env) {
+            Err(e) => eprintln!("{}", e),
+            Ok(_) => {}
+        }
+    }
+    for bin in bins {
+        match copy_bin(&flags, bin.clone()) {
+            Err(e) => eprintln!("io {}", e),
+            Ok(_) => {}
         }
     }
 }
