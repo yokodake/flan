@@ -1,4 +1,4 @@
-//! Command line parsing helpers
+//! command line options
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -24,10 +24,10 @@ pub struct Opt {
     /// explain what is being done
     pub verbose: bool,
     #[structopt(long = "Werror")]
-    /// make all warnings into errors (@TODO: handle this in handler)
+    /// make all warnings into errors
     pub warn_error: bool,
     #[structopt(short = "q", long = "query-dimensions")]
-    /// list all dimensions (@TODO: that require a decision).
+    /// list all dimensions
     pub query_dims: bool,
     #[structopt(name = "PATH", short = "c", long = "config")]
     /// use this config file instead
@@ -142,7 +142,7 @@ impl Decision {
     }
 }
 
-/// Decision for an explicitly named dimension
+/// decision for an explicitly named dimension
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum Index {
     /// by name

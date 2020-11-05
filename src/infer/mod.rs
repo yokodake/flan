@@ -13,7 +13,6 @@ pub use env::{Dim, Env};
 #[doc(inline)]
 pub use errors::Error;
 
-// imports
 use std::collections::HashMap;
 
 use crate::error::Handler;

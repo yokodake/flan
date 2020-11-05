@@ -17,8 +17,8 @@ pub mod infer;
 #[doc(inline)]
 pub use infer::env;
 
+pub mod sourcemap;
+
 pub mod syntax;
 
 pub mod utils;
-
-pub mod sourcemap;

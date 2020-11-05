@@ -1,3 +1,4 @@
+//! configuration file
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -68,7 +69,7 @@ impl Options {
 }
 pub const DEFAULT_FORCE: bool = false;
 
-/// Dimension Declarations.
+/// dimension Declarations.  
 /// @FIXME check whether all Names are unique!!
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]

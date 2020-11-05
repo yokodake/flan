@@ -1,32 +1,37 @@
 //! Configuration module
 //!
 //! @TODO: more precise error handling
+pub mod file;
+pub mod opts;
+
+#[doc(inline)]
+pub use file::{Choices, File};
+pub use opts::StructOpt;
+#[doc(inline)]
+pub use opts::{Decision, Index, Opt};
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-
 use toml::de;
 
 use crate::error::ErrorFlags; // @TODO move here
 
-pub mod file;
-pub mod opts;
-
-pub use file::{Choices, File};
-pub use opts::{Decision, Index};
-use opts::{Opt, StructOpt};
-
 /// see [`ErrorFlags::report_level`]
 pub const VERBOSITY_DEFAULT: u8 = 4;
+/// see [`ErrorFlags::warn_as_error`]
 pub const WARN_DEFAULT: bool = false;
+/// see [`ErrorFlags::no_extra`]
 pub const NO_EXTRA_DEFAULT: bool = false;
+/// see [`Flags::force`]
 pub const FORCE_DEFAULT: bool = false;
+/// see [`Flags::command`]
 pub const COMMAND_DEFAULT: Command = Command::Default;
 
 #[derive(Debug, Clone)]
+/// start configuration.
 pub struct Config {
     pub variables: HashMap<String, String>,
     pub dimensions: HashMap<String, Choices>,
@@ -117,11 +122,13 @@ impl Command {
 }
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+/// config-related parsing error kind. [`Error::Cfg`]
 pub enum ErrorKind {
     OutOfRange,
     InvalidChoice,
     InvalidIdentifier,
 }
+/// config error
 #[derive(Debug)]
 pub enum Error {
     IO(io::Error),
@@ -174,29 +181,18 @@ pub fn path_to_cfgfile<P: AsRef<Path>>(config_path: Option<P>) -> Result<File, E
         }
     };
     match path {
-        Some(path) => file_to_cfgfile(&mut fs::File::open(path).map_err(Error::IO)?),
+        Some(path) => {
+            use std::io::Read;
+            let mut buf = String::new();
+            let mut file = fs::File::open(path).map_err(Error::IO)?;
+            file.read_to_string(&mut buf).map_err(Error::IO)?;
+            string_to_cfgfile(&buf).map_err(Error::TOML)
+        }
         None => Ok(File::default()),
     }
 }
-/// parse config file.
-pub fn file_to_cfgfile(file: &mut fs::File) -> Result<File, Error> {
-    use std::io::Read;
-    let mut buf = String::new();
-    file.read_to_string(&mut buf).map_err(Error::IO)?;
-    string_to_cfgfile(&buf).map_err(Error::TOML)
-}
-/// parse config string.
+
+/// parse config string
 pub fn string_to_cfgfile(s: &String) -> Result<File, de::Error> {
     File::from_str(s.as_ref())
-}
-
-pub fn new() -> Result<(Flags, Config), Error> {
-    let opt = Opt::from_args();
-    let file = path_to_cfgfile(opt.config_file.as_ref())?;
-    // @TODO finer grained error reporting. (see previous commit in main.rs)
-    let decisions = opt.parse_decisions()?;
-    Ok((
-        Flags::new(&opt, file.options.as_ref()),
-        Config::new(decisions.0, decisions.1, file),
-    ))
 }

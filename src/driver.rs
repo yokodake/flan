@@ -8,10 +8,12 @@ use crate::cfg;
 use crate::cfg::Choices;
 use crate::cfg::Index;
 use crate::env::{Dim, Env};
-use crate::error::{ErrorBuilder, ErrorFlags, Handler};
+use crate::error::{ErrorBuilder, Handler};
 use crate::infer;
 use crate::sourcemap::{SrcFile, SrcMap};
 use crate::syntax::*;
+
+// infer
 
 /// helper to make an env from config file (`variables` and `decl_dim`) and cmd line options
 /// (`chs` and `idxs`)
@@ -22,7 +24,7 @@ pub fn make_env<'a>(config: &cfg::Config, handler: &'a mut Handler) -> Option<En
     let pairs = &config.decisions_pair;
 
     let mut dimensions = HashMap::new();
-    let mut errors = 0;
+    let err_diff = handler.err_count;
     for (dn, chs) in decl_dim {
         let r = match chs {
             Choices::Names(ons) => handle_named(&dn, ons, names, pairs, handler),
@@ -32,18 +34,16 @@ pub fn make_env<'a>(config: &cfg::Config, handler: &'a mut Handler) -> Option<En
             Ok(dim) => {
                 dimensions.insert(dn, dim);
             }
-            // @TODO use error handler
             Err(eb) => {
                 if eb.is_error() {
                     eb.delay();
-                    errors += 1;
                 } else {
                     eb.print();
                 }
             }
         }
     }
-    if errors == 0 {
+    if handler.err_count == err_diff {
         // add idxs left to env
         let mut env = Env::new(HashMap::from_iter(variables), dimensions, handler);
         // @SPEEDUP don't clone
@@ -79,7 +79,6 @@ fn handle_named<'a>(
             conflict = true
         }
         if ni.map_or(false, |(n, _)| n == on) {
-            // @TODO use error handler instead.
             handler
                 .warn(
                     format!(
@@ -101,7 +100,6 @@ fn handle_named<'a>(
     #[allow(unused_must_use)]
     if conflict || found.len() > 1 {
         // if conflicting decisions
-        // @TODO use error handler instead.
         let mut msg = String::from("the following choices are conflicting: ");
         let mut it = found.iter();
         if conflict {
@@ -178,6 +176,31 @@ pub fn fill_env(decisions: HashMap<String, Index>, env: &mut Env) {
         };
     }
 }
+
+// syntax
+
+/// Does not fail, only report. Caller should check if all sources passed yielded Terms
+pub fn parse_sources(sources: Vec<SrcFile>, h: &mut Handler) -> Vec<(SrcFile, Terms)> {
+    let mut trees = vec![];
+    for f in sources {
+        match file_to_parser(h, f.clone()) {
+            Some(mut p) => match p.parse() {
+                Ok(tree) => {
+                    trees.push((f, tree));
+                }
+                Err(_) => {
+                    h.print_all();
+                }
+            },
+            None => {
+                h.print_all();
+                continue;
+            }
+        }
+    }
+    trees
+}
+
 /// transform a source into a [`TokenStream`]
 pub fn source_to_stream(h: &mut Handler, src: &str) -> Option<TokenStream> {
     use crate::sourcemap::Pos;
@@ -210,6 +233,8 @@ pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> Option<Parser<
     }
 }
 
+// collect
+
 /// wrapper around [`infer::collect`].
 /// see [`cfg::opts::Opt::query_dims`]
 pub fn collect_dims<'a>(
@@ -227,10 +252,12 @@ pub fn collect_dims<'a>(
         .collect()
 }
 
-/// @FIXME pass flags (overriding) and handle escapes
-/// @FIXME handle escaped values
-/// @TODO we could benefit from [`Write::write_vectored`]
-/// @TODO modify Terms with the decision during typechecking so we don't have to search in env?
+// output
+
+/// @FIXME pass flags (overriding) and handle escapes  
+/// @FIXME handle escaped values  
+/// @TODO we could benefit from [`Write::write_vectored`]  
+/// @TODO modify Terms with the decision during typechecking so we don't have to search in env?  
 /// processes and writes to the destination file.
 pub fn write(file: SrcFile, terms: &Terms, env: &Env) -> io::Result<()> {
     let in_f = fs::File::open(&file.path)?;
@@ -293,64 +320,16 @@ pub fn write_term<R: RelativeSeek + BufRead>(
                 to.write(v.as_bytes())?;
                 Ok(pos)
             }
-            None => panic!("@TODO: var `{}` not found", name),
+            None => panic!("fatal write error: var `{}` not found", name),
         },
         TermK::Dimension { name, children } => match env.get_dimension(name) {
             Some(dim) => match children.get(dim.decision as usize) {
                 Some(child) => write_terms(child, from, to, pos, env),
-                None => panic!("@TODO: OOB decision for `{}`", name),
+                None => panic!("fatal write error: OOB decision for `{}`", name),
             },
-            None => panic!("@TODO: dim `{}` not found", name),
+            None => panic!("fatal write error: dim `{}` not found", name),
         },
     }
-}
-
-/// helper to make a handler from cmdline ops and the configuration file.
-pub fn make_handler(eflags: ErrorFlags, srcmap: Arc<SrcMap>) -> Handler {
-    Handler::new(eflags, srcmap)
-}
-
-/// load all the sources in the source map and returns them in a `Vec`
-pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
-    paths: It,
-) -> (Arc<SrcMap>, Vec<SrcFile>) {
-    let source_map = SrcMap::new();
-    let mut sources = vec![];
-    for (src, dst) in paths {
-        if src.is_dir() {
-            // @TODO traverse and collect files
-            panic!("directories not supported yet")
-        } else {
-            match source_map.load_file(src.clone(), dst.clone()) {
-                // @FIXME error handling
-                Err(_) => eprintln!("couldn't load {}", src.to_string_lossy()),
-                Ok(f) => sources.push(f.clone()),
-            }
-        }
-    }
-    (source_map, sources)
-}
-
-/// Does not fail, only report. Caller should check if all sources passed yielded Terms
-pub fn parse_sources(sources: Vec<SrcFile>, h: &mut Handler) -> Vec<(SrcFile, Terms)> {
-    let mut trees = vec![];
-    for f in sources {
-        match file_to_parser(h, f.clone()) {
-            Some(mut p) => match p.parse() {
-                Ok(tree) => {
-                    trees.push((f, tree));
-                }
-                Err(_) => {
-                    h.print_all();
-                }
-            },
-            None => {
-                h.print_all();
-                continue;
-            }
-        }
-    }
-    trees
 }
 
 pub fn cleanup(paths: Vec<&Path>) {
@@ -362,4 +341,42 @@ pub fn cleanup(paths: Vec<&Path>) {
             }
         }
     }
+}
+
+// source map
+
+/// load all the sources in the source map and returns them in a `Vec`
+pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
+    paths: It,
+) -> (Arc<SrcMap>, Vec<SrcFile>) {
+    let source_map = SrcMap::new();
+    let mut sources = vec![];
+    for (src, dst) in paths {
+        if src.is_dir() {
+            // @TODO traverse and collect files
+            panic!("directories not supported yet...")
+        } else {
+            match source_map.load_file(src.clone(), dst.clone()) {
+                // @FIXME error handling
+                Err(e) => eprintln!("couldn't load `{}`:\n {}", src.to_string_lossy(), e),
+                Ok(f) => sources.push(f.clone()),
+            }
+        }
+    }
+    (source_map, sources)
+}
+
+// cfg
+
+/// build a new Config and Flags, from arguments and config file
+pub fn make_cfgflags() -> Result<(cfg::Flags, cfg::Config), cfg::Error> {
+    use cfg::StructOpt;
+    let opt = cfg::Opt::from_args();
+    let file = cfg::path_to_cfgfile(opt.config_file.as_ref())?;
+    // @TODO finer grained error reporting. (see previous commit in main.rs)
+    let decisions = opt.parse_decisions()?;
+    Ok((
+        cfg::Flags::new(&opt, file.options.as_ref()),
+        cfg::Config::new(decisions.0, decisions.1, file),
+    ))
 }

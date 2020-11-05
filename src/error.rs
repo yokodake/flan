@@ -33,6 +33,15 @@ impl Level {
             _ => false,
         }
     }
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            Level::Fatal => 1,
+            Level::Error => 2,
+            Level::Warning => 3,
+            Level::Note => 4,
+            Level::More => 5,
+        }
+    }
 }
 impl std::fmt::Display for Level {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -98,15 +107,6 @@ impl Error {
     pub fn add_msg(&mut self, msg: String) -> &mut Self {
         self.extra.push(msg);
         self
-    }
-    pub fn levelu8(&self) -> u8 {
-        match self.level {
-            Level::Fatal => 1,
-            Level::Error => 2,
-            Level::Warning => 3,
-            Level::Note => 4,
-            Level::More => 5,
-        }
     }
     pub fn render(&self, src: Option<SrcFile>) -> String {
         // @SAFETY: write does not fail on Strings
@@ -201,7 +201,7 @@ pub struct Handler {
     /// errors than haven't been printed yet, these should be emitted
     /// if we abort (e.g. with a fatal error)
     pub delayed_err: Vec<Error>,
-    pub sources: Arc<SrcMap>, // @TODO
+    pub sources: Arc<SrcMap>,
 }
 
 impl Handler {
@@ -262,35 +262,46 @@ impl Handler {
     /// ```
     fn print_explicit(flags: &ErrorFlags, sources: &SrcMap, err: Error) {
         // @FIXME better error formatting with source files
-        if flags.report_level >= err.levelu8() {
+        if flags.report_level >= err.level.as_u8() {
             println!("{}", err.render(sources.lookup_source(err.span.lo)));
         }
     }
     pub fn error<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
+        let no_extra = self.flags.no_extra;
         ErrorBuilder {
             handler: self,
             level: Level::Error,
             messages: vec![String::from(msg)],
             span: None,
             at_span: None,
+            no_extra,
         }
     }
     pub fn note<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
+        let no_extra = self.flags.no_extra;
         ErrorBuilder {
             handler: self,
             level: Level::Note,
             messages: vec![String::from(msg)],
             span: None,
             at_span: None,
+            no_extra,
         }
     }
     pub fn warn<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
+        let no_extra = self.flags.no_extra;
+        let level = if self.flags.warn_as_error {
+            Level::Error
+        } else {
+            Level::Warning
+        };
         ErrorBuilder {
             handler: self,
-            level: Level::Note,
+            level,
             messages: vec![String::from(msg)],
             span: None,
             at_span: None,
+            no_extra,
         }
     }
 }
@@ -320,6 +331,7 @@ pub struct ErrorBuilder<'a> {
     messages: Vec<String>,
     span: Option<Span>,
     at_span: Option<String>,
+    no_extra: bool,
 }
 
 impl<'a> ErrorBuilder<'a> {
@@ -359,6 +371,9 @@ impl<'a> ErrorBuilder<'a> {
     }
 
     fn add_extra(&mut self, msg: String) {
+        if self.no_extra {
+            return;
+        }
         if self.messages.is_empty() {
             self.messages.push(String::from(""));
         }

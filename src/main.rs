@@ -2,15 +2,15 @@
 #![feature(option_result_contains)]
 #![feature(result_flattening)]
 
-use flan::cfg;
 use flan::cfg::Command;
 #[allow(unused_imports)]
 use flan::debug;
+use flan::error::Handler;
 use flan::infer;
 
 fn main() {
     use flan::driver::*;
-    let (flags, config) = match cfg::new() {
+    let (flags, config) = match make_cfgflags() {
         Ok(f) => f,
         Err(e) => {
             // @FIXME error handling
@@ -22,16 +22,16 @@ fn main() {
 
     let (source_map, sources) = load_sources(config.paths.iter());
 
-    let mut hp = make_handler(flags.eflags, source_map.clone());
+    let mut hp = Handler::new(flags.eflags, source_map.clone());
     let trees = parse_sources(sources, &mut hp);
 
     // @TODO handle errors
-    let mut he = make_handler(flags.eflags, source_map.clone());
+    let mut he = Handler::new(flags.eflags, source_map.clone());
     let mut env = make_env(&config, &mut he).unwrap();
 
     if flags.command == Command::Query {
         for (_, tree) in &trees {
-            let mut h = make_handler(flags.eflags, source_map.clone());
+            let mut h = Handler::new(flags.eflags, source_map.clone());
             collect_dims(tree, &mut h, &config.dimensions);
         }
     } else if trees.iter().fold(false, |acc, (_, tree)| {
