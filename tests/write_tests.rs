@@ -19,7 +19,7 @@ macro_rules! mock_env {
                 ("dim0".into(), Dim::new(0)),
                 ("dim2".into(), Dim::new(2)),
             ]),
-            &mut Handler::new(ErrorFlags::default(), SrcMap::new()),
+            Handler::new(ErrorFlags::default(), SrcMap::new()),
         )
     };
 }

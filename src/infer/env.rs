@@ -12,17 +12,17 @@ use crate::error::Handler;
 #[derive(Debug)]
 /// typechecking/inference environment  
 /// @TODO: use symbols?
-pub struct Env<'a> {
+pub struct Env {
     pub variables: HashMap<String, String>,
     pub dimensions: HashMap<String, Dim>,
-    pub handler: &'a mut Handler,
+    pub handler: Handler,
 }
 
-impl<'a> Env<'a> {
+impl Env {
     pub fn new(
         variables: HashMap<String, String>,
         dimensions: HashMap<String, Dim>,
-        handler: &'a mut Handler,
+        handler: Handler,
     ) -> Self {
         Env {
             variables,
@@ -31,7 +31,7 @@ impl<'a> Env<'a> {
         }
     }
 }
-impl Env<'_> {
+impl Env {
     pub fn get_var(&self, name: &String) -> Option<&String> {
         self.variables.get(name)
     }

@@ -37,7 +37,7 @@ pub fn check(terms: &Terms, env: &mut Env) -> Option<()> {
             TermK::Dimension { name, children } => match env.dimensions.get_mut(name) {
                 Some(d) => {
                     if !d.try_set_dim(children.len() as i8) {
-                        error_size_conflict(env.handler, name, term.opend_span().unwrap());
+                        error_size_conflict(&mut env.handler, name, term.opend_span().unwrap());
                         errors = true;
                     }
                     for c in children {

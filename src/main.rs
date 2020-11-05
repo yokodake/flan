@@ -26,8 +26,8 @@ fn main() {
     let (trees, bins) = parse_sources(sources, &mut hp);
 
     // @TODO handle errors
-    let mut he = Handler::new(flags.eflags, source_map.clone());
-    let mut env = make_env(&config, &mut he).unwrap();
+    let he = Handler::new(flags.eflags, source_map.clone());
+    let mut env = make_env(&config, he).unwrap();
 
     if flags.command == Command::Query {
         for (_, tree) in &trees {
@@ -37,7 +37,7 @@ fn main() {
     } else if trees.iter().fold(false, |acc, (_, tree)| {
         infer::check(tree, &mut env).is_none() || acc
     }) {
-        he.abort();
+        env.handler.abort();
     }
 
     hp.abort_if_err();
@@ -45,20 +45,33 @@ fn main() {
         std::process::exit(SUCCESS)
     }
 
+    let flags_write = flags.clone();
+
+    // the most important point about spawning these threads is to capture panics
+    // without paying the cost of `catch_unwind`
+    let write_t = std::thread::spawn(move ||
     // @TODO driver::write_files
     for (source, tree) in &trees {
-        // @IMPROVEMENT run in a different thread and check exitcode, instead
-        //              of catch_unwind to do cleanup.
-        match write(&flags, source.clone(), &tree, &env) {
-            Err(e) => eprintln!("{}", e),
+        match write(&flags_write, source.clone(), &tree, &env) {
+            Err(e) => panic!("io {}", e),
             Ok(_) => {}
         }
+    });
+    let bin_t = std::thread::spawn(move || {
+        for bin in bins {
+            match copy_bin(&flags, bin.clone()) {
+                Err(e) => panic!("io {}", e),
+                Ok(_) => {}
+            }
+        }
+    });
+    match write_t.join() {
+        Err(_) => eprint!("@TODO: cleanup resources"),
+        Ok(_) => {}
     }
-    for bin in bins {
-        match copy_bin(&flags, bin.clone()) {
-            Err(e) => eprintln!("io {}", e),
-            Ok(_) => {}
-        }
+    match bin_t.join() {
+        Err(_) => eprintln!("@TODO: cleanup resources"),
+        Ok(_) => {}
     }
 }
 

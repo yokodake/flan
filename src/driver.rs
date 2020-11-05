@@ -16,18 +16,19 @@ use crate::{cfg, infer};
 
 /// helper to make an env from config file (`variables` and `decl_dim`) and cmd line options
 /// (`chs` and `idxs`)
-pub fn make_env<'a>(config: &cfg::Config, handler: &'a mut Handler) -> Option<Env<'a>> {
+pub fn make_env(config: &cfg::Config, handler: Handler) -> Option<Env> {
     let variables = config.variables.clone();
     let decl_dim = config.dimensions.clone();
     let names = &config.decisions_name;
     let pairs = &config.decisions_pair;
+    let mut handler = handler;
 
     let mut dimensions = HashMap::new();
     let err_diff = handler.err_count;
     for (dn, chs) in decl_dim {
         let r = match chs {
-            Choices::Names(ons) => handle_named(&dn, ons, names, pairs, handler),
-            Choices::Size(i) => handle_sized(&dn, i, pairs, handler),
+            Choices::Names(ons) => handle_named(&dn, ons, names, pairs, &mut handler),
+            Choices::Size(i) => handle_sized(&dn, i, pairs, &mut handler),
         };
         match r {
             Ok(dim) => {
