@@ -67,7 +67,7 @@ impl Options {
         self.verbosity
     }
 }
-pub const DEFAULT_FORCE: bool = false;
+}
 
 /// dimension Declarations.  
 /// @FIXME check whether all Names are unique!!

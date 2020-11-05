@@ -11,10 +11,8 @@ pub use opts::StructOpt;
 pub use opts::{Decision, Index, Opt};
 
 use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
+use std::{fmt, fs, io};
 use toml::de;
 
 use crate::error::ErrorFlags; // @TODO move here
@@ -29,6 +27,8 @@ pub const NO_EXTRA_DEFAULT: bool = false;
 pub const FORCE_DEFAULT: bool = false;
 /// see [`Flags::command`]
 pub const COMMAND_DEFAULT: Command = Command::Default;
+/// see [`Falgs::ignore_unset`]
+pub const IGNORE_UNSET_DEFAULT: bool = false;
 
 #[derive(Debug, Clone)]
 /// start configuration.

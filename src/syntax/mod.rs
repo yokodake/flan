@@ -1,3 +1,4 @@
+//! parser and lexer modules
 pub mod errors;
 pub mod lexer;
 pub mod parser;

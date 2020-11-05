@@ -1,17 +1,16 @@
+//! helpers and TL functions
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{fs, io};
 
-use crate::cfg;
-use crate::cfg::Choices;
-use crate::cfg::Index;
+use crate::cfg::{Choices, Index};
 use crate::env::{Dim, Env};
 use crate::error::{ErrorBuilder, Handler};
-use crate::infer;
 use crate::sourcemap::{SrcFile, SrcMap};
 use crate::syntax::*;
+use crate::{cfg, infer};
 
 // infer
 
@@ -306,6 +305,7 @@ pub fn write_term<R: RelativeSeek + BufRead>(
     pos: usize, // position in reader (relative to sourcemap though)
     env: &Env,
 ) -> io::Result<usize> {
+    // can we keep panics here? normally everything should be fine after typechecking
     // @TODO use write_vectored?
     match &term.node {
         TermK::Text => {

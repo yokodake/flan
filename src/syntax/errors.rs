@@ -1,3 +1,5 @@
+//! error types for parsing and lexing
+
 /// Errors for Parsing and Lexing.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Error {
