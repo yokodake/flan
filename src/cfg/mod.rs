@@ -27,7 +27,7 @@ pub const NO_EXTRA_DEFAULT: bool = false;
 pub const FORCE_DEFAULT: bool = false;
 /// see [`Flags::command`]
 pub const COMMAND_DEFAULT: Command = Command::Default;
-/// see [`Falgs::ignore_unset`]
+/// see [`Flags::ignore_unset`]
 pub const IGNORE_UNSET_DEFAULT: bool = false;
 
 #[derive(Debug, Clone)]

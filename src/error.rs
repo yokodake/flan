@@ -246,11 +246,15 @@ impl Handler {
     }
     /// delay error reporting for later
     pub fn delay(&mut self, err: Error) {
-        self.err_count += 1;
+        if err.level.as_u8() < Level::Warning.as_u8() {
+            self.err_count += 1;
+        }
         self.delayed_err.push(err);
     }
     pub fn print(&mut self, err: Error) {
-        self.err_count += 1;
+        if err.level.as_u8() < Level::Warning.as_u8() {
+            self.err_count += 1;
+        }
         Self::print_explicit(&self.flags, &self.sources, err)
     }
     /// exists in order to avoid code duplication between `print` and `print_all` due to
