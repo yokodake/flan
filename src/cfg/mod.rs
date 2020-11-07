@@ -15,8 +15,6 @@ use std::path::{Path, PathBuf};
 use std::{fmt, fs, io};
 use toml::de;
 
-use crate::error::ErrorFlags; // @TODO move here
-
 /// see [`ErrorFlags::report_level`]
 pub const VERBOSITY_DEFAULT: u8 = 4;
 /// see [`ErrorFlags::warn_as_error`]
@@ -67,8 +65,6 @@ pub struct Flags {
     pub out_prefix: Option<PathBuf>,
     /// `--force`
     pub force: bool,
-    /// `--ignore-unset`
-    pub ignore_unset: bool,
     /// `--dry-run` or `--query-dimensions`
     pub command: Command,
 }
@@ -81,21 +77,22 @@ impl Flags {
             config.and_then(file::Options::verbosity),
             VERBOSITY_DEFAULT,
         );
+        let ignore_unset = Self::make_bflag(
+            opt.ignore_unset,
+            config.and_then(file::Options::ignore_unset),
+            IGNORE_UNSET_DEFAULT,
+        );
         let eflags = ErrorFlags {
             report_level,
             warn_as_error: opt.warn_error(),
             no_extra: opt.no_extra(),
+            ignore_unset,
         };
 
         let force = Self::make_bflag(
             opt.force,
             config.and_then(file::Options::force),
             FORCE_DEFAULT,
-        );
-        let ignore_unset = Self::make_bflag(
-            opt.ignore_unset,
-            config.and_then(file::Options::ignore_unset),
-            IGNORE_UNSET_DEFAULT,
         );
         let command = Command::from_opt(&opt);
 
@@ -115,7 +112,6 @@ impl Flags {
             in_prefix,
             out_prefix,
             force,
-            ignore_unset,
             command,
         }
     }
@@ -124,6 +120,29 @@ impl Flags {
     }
     fn make_bflag(opt: bool, cfg: Option<bool>, default: bool) -> bool {
         opt || cfg.unwrap_or(default)
+    }
+}
+/// flags related to error reporting
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Debug, Hash)]
+pub struct ErrorFlags {
+    /// 0 = prints nothing, 1 = fatal errors only, 2 = also errors,
+    /// 3 = also warnings, 4 = also notes/suggestions
+    pub report_level: u8,
+    /// treat warnings as errors (fail before copying)
+    pub warn_as_error: bool,
+    /// do not print extra notes & suggestions
+    pub no_extra: bool,
+    /// don't error on undeclared variables: maps to empty string.
+    pub ignore_unset: bool,
+}
+impl Default for ErrorFlags {
+    fn default() -> Self {
+        ErrorFlags {
+            report_level: 5,
+            warn_as_error: false,
+            no_extra: false,
+            ignore_unset: false,
+        }
     }
 }
 

@@ -4,6 +4,7 @@
 //! but I'm stil not sure whether copying should continue, stop or a rollback should occur.
 use std::sync::Arc;
 
+pub use crate::cfg::ErrorFlags;
 use crate::sourcemap::{Span, SrcFile, SrcMap};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Debug, Hash)]
@@ -172,31 +173,10 @@ impl std::fmt::Display for Error {
     }
 }
 
-/// flags related to error reporting
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Debug, Hash)]
-pub struct ErrorFlags {
-    /// 0 = prints nothing, 1 = fatal errors only, 2 = also errors,
-    /// 3 = also warnings, 4 = also notes/suggestions
-    pub report_level: u8,
-    /// treat warnings as errors (fail before copying)
-    pub warn_as_error: bool,
-    /// do not print extra notes & suggestions
-    pub no_extra: bool,
-}
-impl Default for ErrorFlags {
-    fn default() -> Self {
-        ErrorFlags {
-            report_level: 5,
-            warn_as_error: false,
-            no_extra: false,
-        }
-    }
-}
-
 #[derive(Debug)]
 /// an error handler
 pub struct Handler {
-    pub flags: ErrorFlags,
+    pub eflags: ErrorFlags,
     pub err_count: usize,
     /// errors than haven't been printed yet, these should be emitted
     /// if we abort (e.g. with a fatal error)
@@ -205,9 +185,9 @@ pub struct Handler {
 }
 
 impl Handler {
-    pub fn new(flags: ErrorFlags, sources: Arc<SrcMap>) -> Self {
+    pub fn new(eflags: ErrorFlags, sources: Arc<SrcMap>) -> Self {
         Handler {
-            flags,
+            eflags,
             err_count: 0,
             delayed_err: Vec::new(),
             sources,
@@ -241,7 +221,7 @@ impl Handler {
     /// prints all the delayed errors
     pub fn print_all(&mut self) {
         while let Some(e) = self.delayed_err.pop() {
-            Self::print_explicit(&self.flags, &self.sources, e);
+            Self::print_explicit(&self.eflags, &self.sources, e);
         }
     }
     /// delay error reporting for later
@@ -255,7 +235,7 @@ impl Handler {
         if err.level.as_u8() < Level::Warning.as_u8() {
             self.err_count += 1;
         }
-        Self::print_explicit(&self.flags, &self.sources, err)
+        Self::print_explicit(&self.eflags, &self.sources, err)
     }
     /// exists in order to avoid code duplication between `print` and `print_all` due to
     /// mutable borrow conflicts of `self`, despite borrowing two different fields
@@ -264,13 +244,13 @@ impl Handler {
     ///   self.print(e) // mutable borrow
     /// }
     /// ```
-    fn print_explicit(flags: &ErrorFlags, sources: &SrcMap, err: Error) {
-        if flags.report_level >= err.level.as_u8() {
+    fn print_explicit(eflags: &ErrorFlags, sources: &SrcMap, err: Error) {
+        if eflags.report_level >= err.level.as_u8() {
             println!("{}", err.render(sources.lookup_source(err.span.lo)));
         }
     }
     pub fn error<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
-        let no_extra = self.flags.no_extra;
+        let no_extra = self.eflags.no_extra;
         ErrorBuilder {
             handler: self,
             level: Level::Error,
@@ -281,7 +261,7 @@ impl Handler {
         }
     }
     pub fn note<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
-        let no_extra = self.flags.no_extra;
+        let no_extra = self.eflags.no_extra;
         ErrorBuilder {
             handler: self,
             level: Level::Note,
@@ -292,8 +272,8 @@ impl Handler {
         }
     }
     pub fn warn<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
-        let no_extra = self.flags.no_extra;
-        let level = if self.flags.warn_as_error {
+        let no_extra = self.eflags.no_extra;
+        let level = if self.eflags.warn_as_error {
             Level::Error
         } else {
             Level::Warning

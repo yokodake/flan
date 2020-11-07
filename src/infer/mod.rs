@@ -26,7 +26,7 @@ pub fn check(terms: &Terms, env: &mut Env) -> Option<()> {
         match &term.node {
             TermK::Text => {}
             TermK::Var(name) => {
-                if !env.variables.contains_key(name) {
+                if !env.eflags().ignore_unset && !env.variables.contains_key(name) {
                     env.handler
                         .error(format!("Undeclared variable `{}`.", name).as_ref())
                         .with_span(term.span)

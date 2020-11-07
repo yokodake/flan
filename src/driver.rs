@@ -332,8 +332,9 @@ pub fn write_term<R: RelativeSeek + BufRead>(
         TermK::Var(name) => match env.get_var(name) {
             Some(v) => {
                 to.write(v.as_bytes())?;
-                Ok(pos)
+                Ok(pos + term.span.len())
             }
+            None if env.eflags().ignore_unset => Ok(pos),
             None => panic!("fatal write error: var `{}` not found", name),
         },
         TermK::Dimension { name, children } => match env.get_dimension(name) {

@@ -7,6 +7,7 @@
 //!   to refine delayed_errors.
 use std::collections::HashMap;
 
+use crate::cfg::ErrorFlags;
 use crate::error::Handler;
 
 #[derive(Debug)]
@@ -44,6 +45,9 @@ impl Env {
     /// see [`Dim::try_set_dim`]
     pub fn try_set_dimension(&mut self, name: &String, n: i8) -> Option<bool> {
         self.get_dimension_mut(name).map(|d| d.try_set_dim(n))
+    }
+    pub fn eflags(&self) -> ErrorFlags {
+        self.handler.eflags
     }
 }
 
