@@ -3,6 +3,7 @@ use std::iter::FromIterator;
 
 use flan::env::{Dim, Env};
 use flan::error::{ErrorFlags, Handler};
+use flan::output::write_terms;
 use flan::sourcemap::SrcMap;
 
 mod utils;
@@ -38,7 +39,6 @@ fn txt_terms() {
 }
 #[test]
 fn skip_txt() {
-    use flan::driver::write_terms;
     use flan::syntax::{Term, TermK};
     use std::io::Cursor;
 

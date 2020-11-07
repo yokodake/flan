@@ -4,6 +4,7 @@ use std::io::Cursor;
 use flan::driver::*;
 use flan::env::Env;
 use flan::error::{ErrorFlags, Handler};
+use flan::output::write_terms;
 use flan::sourcemap::{Spanned, SrcMap};
 use flan::syntax::lexer::{Token, TokenK};
 use flan::syntax::{Parsed, TermK, Terms};

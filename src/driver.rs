@@ -8,11 +8,12 @@ use std::{fs, io};
 use crate::cfg::{Choices, Index};
 use crate::env::{Dim, Env};
 use crate::error::{ErrorBuilder, Handler};
+use crate::output::write_terms;
 use crate::sourcemap::{SrcFile, SrcMap};
 use crate::syntax::*;
 use crate::{cfg, infer};
 
-// infer
+/* infer */
 
 /// helper to make an env from config file (`variables` and `decl_dim`) and cmd line options
 /// (`chs` and `idxs`)
@@ -177,7 +178,7 @@ pub fn fill_env(decisions: HashMap<String, Index>, env: &mut Env) {
     }
 }
 
-// syntax
+/* syntax */
 
 /// Does not fail, only report. Caller should check if all sources passed yielded Terms
 pub fn parse_sources(
@@ -241,7 +242,7 @@ pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> Option<Parser<
     }
 }
 
-// collect
+/* collect */
 
 /// wrapper around [`infer::collect`].
 /// see [`cfg::opts::Opt::query_dims`]
@@ -260,11 +261,11 @@ pub fn collect_dims<'a>(
         .collect()
 }
 
-// output
+/* output */
 
+/// processes and writes to the destination file.  
 /// @TODO we could benefit from [`Write::write_vectored`]  
 /// @TODO modify Terms with the decision during typechecking so we don't have to search in env?  
-/// processes and writes to the destination file.
 pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io::Result<()> {
     let in_f = fs::File::open(&file.path)?;
     let mut reader = io::BufReader::new(in_f);
@@ -280,80 +281,8 @@ pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io:
     Ok(())
 }
 
-use crate::utils::RelativeSeek;
-use std::io::{BufRead, Write};
-
-/// write the terms to `to`.
-/// `start` is the current (starting) position in the Reader `from`
-pub fn write_terms<R: RelativeSeek + BufRead>(
-    terms: &Terms,
-    from: &mut R,
-    to: &mut impl Write,
-    start: usize, // position in reader (relative to sourcemap though)
-    env: &Env,
-) -> io::Result<usize> {
-    use std::io::SeekFrom;
-    let mut pos = start;
-    for t in terms {
-        let off = t.span.lo.as_u64() - pos as u64;
-        if off > i64::MAX as u64 {
-            // i64::MAX is bigger than the buffer anyways
-            from.seek(SeekFrom::Current(i64::MAX))?;
-            let rest = off - i64::MAX as u64;
-            from.seek_relative(rest as i64)?;
-        } else {
-            from.seek_relative(off as i64)?;
-        }
-        // @TODO check how much has been written
-        pos += off as usize;
-        pos = write_term(t, from, to, pos, env)?;
-    }
-    Ok(pos)
-}
-
-/// `start` is the current (starting) position in the `from` Reader
-pub fn write_term<R: RelativeSeek + BufRead>(
-    term: &Term,
-    from: &mut R,
-    to: &mut impl Write,
-    pos: usize, // position in reader (relative to sourcemap though)
-    env: &Env,
-) -> io::Result<usize> {
-    // can we keep panics here? normally everything should be fine after typechecking
-    // @TODO use write_vectored?
-    match &term.node {
-        TermK::Text => {
-            // safe alternative?
-            let mut buf = unsafe { Box::<[u8]>::new_uninit_slice(term.span.len()).assume_init() };
-            from.read(&mut buf)?;
-            to.write(&buf)?;
-            Ok(pos + term.span.len())
-        }
-        TermK::Var(name) => match env.get_var(name) {
-            Some(v) => {
-                to.write(v.as_bytes())?;
-                Ok(pos + term.span.len())
-            }
-            None if env.eflags().ignore_unset => Ok(pos),
-            None => panic!("fatal write error: var `{}` not found", name),
-        },
-        TermK::Dimension { name, children } => match env.get_dimension(name) {
-            Some(dim) => match children.get(dim.decision as usize) {
-                Some(child) => write_terms(child, from, to, pos, env),
-                None => panic!("fatal write error: OOB decision for `{}`", name),
-            },
-            None => panic!("fatal write error: dim `{}` not found", name),
-        },
-    }
-}
-
-pub fn copy_bin(flags: &cfg::Flags, file: SrcFile) -> io::Result<()> {
-    if !flags.force && file.destination.exists() {
-        return Ok(());
-    }
-    fs::copy(&file.path, &file.destination)?;
-    Ok(())
-}
+#[doc(inline)]
+pub use crate::output::copy_bin;
 
 pub fn clean(paths: Vec<&Path>) {
     for path in paths {
@@ -366,7 +295,7 @@ pub fn clean(paths: Vec<&Path>) {
     }
 }
 
-// source map
+/* source map */
 
 /// load all the sources in the source map and returns them in a `Vec`
 pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
@@ -392,7 +321,7 @@ pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
     (source_map, sources)
 }
 
-// cfg
+/* cfg */
 
 /// build a new Config and Flags, from arguments and config file
 pub fn make_cfgflags() -> Result<(cfg::Flags, cfg::Config), cfg::Error> {
