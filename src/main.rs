@@ -46,9 +46,9 @@ fn main() {
     let mut env = make_env(&config, he).unwrap();
 
     if flags.command == Command::Query {
-        for (_, tree) in &trees {
-            let mut h = Handler::new(flags.eflags, source_map.clone());
-            collect_dims(tree, &mut h, &config.dimensions);
+        let mut h = Handler::new(flags.eflags, source_map.clone());
+        for (dim, ch) in collect_dims(&mut trees.iter().map(|t| &t.1), &mut h, &config.dimensions) {
+            println!("{}", pp_dim(&dim, &ch));
         }
     } else if trees.iter().fold(false, |acc, (_, tree)| {
         infer::check(tree, &mut env).is_none() || acc

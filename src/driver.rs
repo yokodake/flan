@@ -246,19 +246,34 @@ pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> Option<Parser<
 
 /// wrapper around [`infer::collect`].
 /// see [`cfg::opts::Opt::query_dims`]
-pub fn collect_dims<'a>(
-    terms: &Terms,
+pub fn collect_dims<'a, It: Iterator<Item = &'a Terms>>(
+    trees: &mut It,
     h: &mut Handler,
     declared_dims: &HashMap<Name, Choices>,
 ) -> Vec<(Name, Choices)> {
     let mut map = HashMap::new();
-    infer::collect(terms, h, &mut map);
+    for ref terms in trees {
+        infer::collect(terms, h, &mut map);
+    }
+    // @NOTE is checking conflict between declared_dims here needed?
     map.into_iter()
         .map(|(k, v)| match declared_dims.get(&k) {
             Some(v) => (k, v.clone()),
             None => (k, Choices::Size(v)),
         })
         .collect()
+}
+
+pub fn pp_dim(dim: &Name, ch: &Choices) -> String {
+    // @SAFETY write does not fail on `String`
+    #![allow(unused_must_use)]
+    use std::fmt::Write;
+    let mut buf = format!("dim {} = ", dim);
+    match ch {
+        Choices::Size(n) => write!(buf, "size {}", n),
+        Choices::Names(v) => write!(buf, "{:?}", v),
+    };
+    buf
 }
 
 /* output */
