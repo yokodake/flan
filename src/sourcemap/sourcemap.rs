@@ -1,10 +1,9 @@
 //! Source file maps and Source files.
 use std::borrow::Cow;
-use std::fs::read_to_string;
-use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, RwLock};
+use std::{fs, io};
 
 use super::loc::Loc;
 use super::span::*;
@@ -105,6 +104,12 @@ impl File {
     pub fn contains(&self, span: Span) -> bool {
         self.start <= span.lo && self.end >= span.hi
     }
+    pub fn is_stdin(&self) -> bool {
+        self.path == PathBuf::from("<stdin>")
+    }
+    pub fn is_stdout(&self) -> bool {
+        self.destination == PathBuf::from("<stdout>")
+    }
 }
 
 /// type synonym for easier refactoring
@@ -138,7 +143,7 @@ impl SrcMap {
     pub fn path_to_file(path: PathBuf, destination: PathBuf) -> io::Result<File> {
         use std::io::{Error, ErrorKind};
         // @TODO
-        if !path.is_file() {
+        if path != PathBuf::from("<stdin>") && !path.is_file() {
             Err(Error::new(
                 ErrorKind::InvalidInput,
                 format!("`{}` not a file.", path.to_string_lossy()).as_ref(),
@@ -147,7 +152,7 @@ impl SrcMap {
         let lines;
         let start = Pos(0);
         let name = path.file_name().unwrap().to_string_lossy().into();
-        let (src, len) = match read_to_string(path.as_path()) {
+        let (src, len) = match Self::read_to_string(path.as_path()) {
             Err(e) => {
                 if e.kind() == ErrorKind::InvalidData {
                     lines = vec![];
@@ -220,5 +225,16 @@ impl SrcMap {
     fn bump_start(&self, size: PosInner) -> u64 {
         use std::sync::atomic::Ordering;
         self.start.fetch_add(size + 1, Ordering::Relaxed)
+    }
+
+    pub fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
+        use std::io::Read;
+        if path.as_ref() == &PathBuf::from("<stdin>") {
+            let mut buf = String::new();
+            std::io::stdin().read_to_string(&mut buf)?;
+            Ok(buf)
+        } else {
+            fs::read_to_string(path)
+        }
     }
 }

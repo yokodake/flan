@@ -35,6 +35,9 @@ pub struct Opt {
     #[structopt(name = "PATH", short = "c", long = "config")]
     /// use this config file instead
     pub config_file: Option<PathBuf>,
+    #[structopt(name = "[OUT]", long = "stdin")]
+    /// read from stdin, write to OUT. If no OUT given writes to stdout
+    pub stdin: Option<Option<PathBuf>>,
     #[structopt(name = "OUTPATH", short = "o", long = "out-prefix", parse(from_os_str))]
     /// destination path
     pub out_prefix: Option<PathBuf>,

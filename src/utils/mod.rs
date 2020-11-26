@@ -56,3 +56,12 @@ where
         <Self as Seek>::seek(self, offset)
     }
 }
+impl<T: RelativeSeek + ?Sized> RelativeSeek for Box<T> {
+    fn seek_relative(&mut self, offset: i64) -> io::Result<()> {
+        (**self).seek_relative(offset)
+    }
+
+    fn seek(&mut self, offset: SeekFrom) -> io::Result<u64> {
+        (**self).seek(offset)
+    }
+}

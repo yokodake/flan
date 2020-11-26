@@ -59,14 +59,16 @@ impl Config {
 pub struct Flags {
     /// see [`ErrorFlags`]
     pub eflags: ErrorFlags,
-    /// `--in-prefix`
-    pub in_prefix: Option<PathBuf>,
-    /// `--out-prefix`
-    pub out_prefix: Option<PathBuf>,
     /// `--force`
     pub force: bool,
     /// `--dry-run` or `--query-dimensions`
     pub command: Command,
+    /// `--stdin`
+    pub stdin: Option<PathBuf>,
+    /// `--in-prefix`
+    pub in_prefix: Option<PathBuf>,
+    /// `--out-prefix`
+    pub out_prefix: Option<PathBuf>,
 }
 
 impl Flags {
@@ -106,9 +108,11 @@ impl Flags {
             .as_ref()
             .or(config.and_then(file::Options::out_prefix))
             .cloned();
+        let stdin = opt.stdin.clone().map(|o| o.unwrap_or("<stdout>".into()));
 
         Flags {
             eflags,
+            stdin,
             in_prefix,
             out_prefix,
             force,

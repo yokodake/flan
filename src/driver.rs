@@ -5,13 +5,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{fs, io};
 
-use crate::cfg::{Choices, Index};
 use crate::env::{Dim, Env};
 use crate::error::{ErrorBuilder, Handler};
 use crate::output::write_terms;
 use crate::sourcemap::{SrcFile, SrcMap};
 use crate::syntax::*;
 use crate::{cfg, infer};
+use crate::{
+    cfg::{Choices, Index},
+    utils::RelativeSeek,
+};
 
 /* infer */
 
@@ -282,8 +285,22 @@ pub fn pp_dim(dim: &Name, ch: &Choices) -> String {
 /// @TODO we could benefit from [`Write::write_vectored`]  
 /// @TODO modify Terms with the decision during typechecking so we don't have to search in env?  
 pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io::Result<()> {
-    let in_f = fs::File::open(&file.path)?;
-    let mut reader = io::BufReader::new(in_f);
+    use crate::sourcemap::SourceInfo;
+    use std::io::{BufRead, Cursor};
+
+    trait SrcReader: RelativeSeek + BufRead {}
+    impl<T: BufRead + RelativeSeek> SrcReader for T {}
+
+    let mut reader: Box<dyn SrcReader> = if file.is_stdin() {
+        let src = match &file.src {
+            SourceInfo::Source(s) => Cursor::new(s.as_bytes()),
+            SourceInfo::Binary => panic!("cannot read form binary input in <stdin>"),
+        };
+        Box::new(io::BufReader::new(src))
+    } else {
+        Box::new(io::BufReader::new(fs::File::open(&file.path)?))
+    };
+    let mut dest = file.destination.clone();
     if !flags.force && file.destination.exists() {
         let msg = format!(
             "error: file `{}` already exists. [use --force to overwrite]",
@@ -291,7 +308,13 @@ pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io:
         );
         return Err(io::Error::new(io::ErrorKind::AlreadyExists, msg));
     }
-    let mut out_f = fs::File::create(&file.destination)?;
+    if file.destination == PathBuf::from("<stdout>") {
+        eprintln!(
+            "Writing to standard output not supported yet. Writing to file `./flan.stdout` instead"
+        );
+        dest = PathBuf::from("flan.stdout");
+    }
+    let mut out_f = fs::File::create(&dest)?;
     write_terms(terms, &mut reader, &mut out_f, file.start.as_usize(), env)?;
     Ok(())
 }
@@ -317,12 +340,33 @@ pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
     flags: &cfg::Flags,
     paths: It,
 ) -> (Arc<SrcMap>, Vec<SrcFile>) {
+    fn mk_path(prefix: Option<&PathBuf>, path: PathBuf) -> PathBuf {
+        if path == PathBuf::from("<stdin>") || path == PathBuf::from("<stdout>") {
+            path
+        } else if prefix.is_some() {
+            prefix.unwrap().join(path)
+        } else {
+            path
+        }
+    }
     let source_map = SrcMap::new();
     let mut sources = vec![];
     let inp = flags.in_prefix.as_ref();
+    let outp = flags.out_prefix.as_ref();
+
+    if flags.stdin.is_some() {
+        // @IMPROVEMENT error handling
+        match source_map.load_file(
+            "<stdin>".into(),
+            mk_path(outp, flags.stdin.clone().unwrap()),
+        ) {
+            Err(e) => eprintln!("couldn't load `{}`:\n {}", "<stdin>", e),
+            Ok(f) => sources.push(f.clone()),
+        };
+    }
     for (src_, dst_) in paths {
-        let src = inp.map(|p| p.join(src_)).unwrap_or(src_.clone());
-        let dst = inp.map(|p| p.join(dst_)).unwrap_or(dst_.clone());
+        let src = mk_path(inp, src_.clone());
+        let dst = mk_path(outp, dst_.clone());
         if src.is_dir() {
             panic!("@TODO: directories not supported yet...")
         } else {
