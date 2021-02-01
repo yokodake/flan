@@ -126,7 +126,7 @@ impl Decision {
         use std::num::IntErrorKind;
         return match s.parse() {
             Ok(i) if i < 128 => Ok(Index::Num(i)),
-            Err(e) if *e.kind() == IntErrorKind::Overflow => Err(Error::out_of_range(s)),
+            Err(e) if *e.kind() == IntErrorKind::PosOverflow => Err(Error::out_of_range(s)),
             _ => {
                 if Self::validate_id(s).is_ok() {
                     Ok(Index::Name(s.into()))

@@ -146,7 +146,7 @@ impl SrcMap {
         if path != PathBuf::from("<stdin>") && !path.is_file() {
             Err(Error::new(
                 ErrorKind::InvalidInput,
-                format!("`{}` not a file.", path.to_string_lossy()).as_ref(),
+                format!("`{}` not a file.", path.to_string_lossy()),
             ))?;
         }
         let lines;
