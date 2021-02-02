@@ -137,10 +137,10 @@ impl Metrics {
             copy_f: -1,
             total_f: 0,
             start: Instant::now(),
-            front: Duration::zero(),
-            infer: Duration::zero(),
-            end: Duration::zero(),
-            total: Duration::zero(),
+            front: Duration::ZERO,
+            infer: Duration::ZERO,
+            end:   Duration::ZERO,
+            total: Duration::ZERO,
         }
     }
     pub fn total_files(&mut self, total_files: isize) {
