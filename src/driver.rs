@@ -334,21 +334,21 @@ pub fn clean(paths: Vec<&Path>) {
 }
 
 /* source map */
+fn mk_path(prefix: Option<&PathBuf>, path: PathBuf) -> PathBuf {
+    if path == PathBuf::from("<stdin>") || path == PathBuf::from("<stdout>") {
+        path
+    } else if prefix.is_some() {
+        prefix.unwrap().join(path)
+    } else {
+        path
+    }
+}
 
 /// load all the sources in the source map and returns them in a `Vec`
 pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
     flags: &cfg::Flags,
     paths: It,
 ) -> (Arc<SrcMap>, Vec<SrcFile>) {
-    fn mk_path(prefix: Option<&PathBuf>, path: PathBuf) -> PathBuf {
-        if path == PathBuf::from("<stdin>") || path == PathBuf::from("<stdout>") {
-            path
-        } else if prefix.is_some() {
-            prefix.unwrap().join(path)
-        } else {
-            path
-        }
-    }
     let source_map = SrcMap::new();
     let mut sources = vec![];
     let inp = flags.in_prefix.as_ref();
@@ -364,20 +364,59 @@ pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
             Ok(f) => sources.push(f.clone()),
         };
     }
+    load_files(paths, inp, outp, &source_map, &mut sources);
+    (source_map, sources)
+}
+
+fn load_files<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
+    paths: It, 
+    inp: Option<&PathBuf>, 
+    outp: Option<&PathBuf>, 
+    source_map: &Arc<SrcMap>, 
+    sources: &mut Vec<SrcFile>
+) {
+    // @FIXME basically if we use a closure in the .map() we hit a recursion limit for instanciation of load_files
+    //        another reason to rewrite the whole source loading API.
+    fn ref_inner<T,U>(x : &(T, U)) -> (&T, &U) {
+        match x {
+            (t, u) => (t, u)
+        }
+    }
     for (src_, dst_) in paths {
         let src = mk_path(inp, src_.clone());
         let dst = mk_path(outp, dst_.clone());
         if src.is_dir() {
-            panic!("@TODO: directories not supported yet...")
+            // @IMPROVEMENT ignore sub-files/dirs
+            // @FIXME rather ugly to go from It<&(x,y)> to It<(&x, &y)>.
+            //        while the representations are obviously completely different
+            //        this could probably benefit from some adjusting of the calling/caller types 
+            match get_subpaths(src, src_, dst_) {
+                Ok(paths) => {
+                    let paths = paths.iter().map(ref_inner);
+                    load_files(paths, inp, outp, source_map, sources)
+                }
+                Err(e) => 
+                    eprintln!("couldn't load directory `{}`:\n  {}", src_.to_string_lossy(), e),
+            }
         } else {
             match source_map.load_file(src, dst) {
                 // @IMPROVEMENT error handling
-                Err(e) => eprintln!("couldn't load `{}`:\n {}", src_.to_string_lossy(), e),
+                Err(e) => eprintln!("couldn't load `{}`:\n  {}", src_.to_string_lossy(), e),
                 Ok(f) => sources.push(f.clone()),
             }
         }
     }
-    (source_map, sources)
+}
+
+/// Get the path of the contents of a directory and appends the directory's (source and destination) relative path to each entry.
+fn get_subpaths(dir: impl AsRef<Path>, src: &PathBuf, dst: &PathBuf) -> io::Result<Vec<(PathBuf, PathBuf)>> {
+    dir.as_ref()
+       .read_dir()
+       .and_then(|rd| 
+                   rd.map(|e| {
+                            let f = e?.file_name();
+                            Ok((src.join(&f), dst.join(f)))
+                   }).collect())
 }
 
 /* cfg */
