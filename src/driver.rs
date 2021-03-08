@@ -309,7 +309,7 @@ pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io:
         return Err(io::Error::new(io::ErrorKind::AlreadyExists, msg));
     }
     if file.destination == PathBuf::from("<stdout>") {
-        eprintln!(
+        emit_error!(
             "Writing to standard output not supported yet. Writing to file `./flan.stdout` instead"
         );
         dest = PathBuf::from("flan.stdout");
@@ -360,7 +360,7 @@ pub fn load_sources<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
             "<stdin>".into(),
             mk_path(outp, flags.stdin.clone().unwrap()),
         ) {
-            Err(e) => eprintln!("couldn't load `{}`:\n {}", "<stdin>", e),
+            Err(e) => emit_error!("couldn't load `{}`:\n {}", "<stdin>", e),
             Ok(f) => sources.push(f.clone()),
         };
     }
@@ -396,12 +396,12 @@ fn load_files<'a, It: Iterator<Item = (&'a PathBuf, &'a PathBuf)>>(
                     load_files(paths, inp, outp, source_map, sources)
                 }
                 Err(e) => 
-                    eprintln!("couldn't load directory `{}`:\n  {}", src_.to_string_lossy(), e),
+                    emit_error!("couldn't load directory `{}`:\n  {}", src_.to_string_lossy(), e),
             }
         } else {
             match source_map.load_file(src, dst) {
                 // @IMPROVEMENT error handling
-                Err(e) => eprintln!("couldn't load `{}`:\n  {}", src_.to_string_lossy(), e),
+                Err(e) => emit_error!("couldn't load `{}`:\n  {}", src_.to_string_lossy(), e),
                 Ok(f) => sources.push(f.clone()),
             }
         }

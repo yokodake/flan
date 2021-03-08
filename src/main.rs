@@ -2,12 +2,13 @@
 #![feature(option_result_contains)]
 #![feature(result_flattening)]
 #![feature(duration_zero)]
+#![feature(format_args_nl)]
 
 use std::sync::Arc;
 
+use flan::{debug, emit_error};
 use flan::cfg::Command;
 #[allow(unused_imports)]
-use flan::debug;
 use flan::error::Handler;
 use flan::infer;
 
@@ -93,14 +94,14 @@ fn main() {
     });
     match write_th.join() {
         Err(_) => {
-            eprint!("@TODO: cleanup resources");
+            emit_error!("@TODO: cleanup resources");
             metrics.processed(-1)
         }
         Ok(n) => metrics.processed(n),
     }
     match bin_th.join() {
         Err(_) => {
-            eprintln!("@TODO: cleanup resources");
+            emit_error!("@TODO: cleanup resources");
             metrics.copied(-1)
         }
         Ok(n) => metrics.copied(n),

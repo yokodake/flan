@@ -7,6 +7,13 @@ use std::sync::Arc;
 pub use crate::cfg::ErrorFlags;
 use crate::sourcemap::{Span, SrcFile, SrcMap};
 
+#[macro_export]
+macro_rules! emit_error {
+    ($($arg:tt)*) => ({
+        $crate::error::Error::_emit($crate::error::Level::Error, format_args_nl!($($arg)*));
+    })
+}
+
 #[derive(Clone, PartialEq, PartialOrd, Eq, Debug, Hash)]
 pub struct Error {
     level: Level,
@@ -61,6 +68,15 @@ impl std::fmt::Display for Level {
 }
 
 impl Error {
+    pub fn _emit(level: Level, args: std::fmt::Arguments) {
+        use std::io::{self, Write};
+        #[allow(unused_must_use)] {
+            io::stderr().write(Self::with_msg(level, std::fmt::format(args))
+                              .render(None)
+                              .as_ref()
+                              );
+        }
+    }
     pub fn is_fatal(&self) -> bool {
         self.level.is_fatal()
     }
@@ -221,7 +237,7 @@ impl Handler {
     /// prints all the delayed errors
     pub fn print_all(&mut self) {
         while let Some(e) = self.delayed_err.pop() {
-            Self::print_explicit(&self.eflags, &self.sources, e);
+            Self::eprint_explicit(&self.eflags, &self.sources, e);
         }
     }
     /// delay error reporting for later
@@ -235,7 +251,7 @@ impl Handler {
         if err.level.as_u8() < Level::Warning.as_u8() {
             self.err_count += 1;
         }
-        Self::print_explicit(&self.eflags, &self.sources, err)
+        Self::eprint_explicit(&self.eflags, &self.sources, err)
     }
     /// exists in order to avoid code duplication between `print` and `print_all` due to
     /// mutable borrow conflicts of `self`, despite borrowing two different fields
@@ -244,9 +260,9 @@ impl Handler {
     ///   self.print(e) // mutable borrow
     /// }
     /// ```
-    fn print_explicit(eflags: &ErrorFlags, sources: &SrcMap, err: Error) {
+    fn eprint_explicit(eflags: &ErrorFlags, sources: &SrcMap, err: Error) {
         if eflags.report_level >= err.level.as_u8() {
-            println!("{}", err.render(sources.lookup_source(err.span.lo)));
+            eprintln!("{}", err.render(sources.lookup_source(err.span.lo)));
         }
     }
     pub fn error<'a>(&'a mut self, msg: &str) -> ErrorBuilder<'a> {
