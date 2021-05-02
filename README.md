@@ -1,6 +1,6 @@
 # FLAN
 A dot-file manager, inspired by Sheng Chen's `Variational Typing`.
-The idea is to use variational types to produce different dot-files depending on the configuration (i.e. a laptop or a desktop), avoiding the need to deduplicate code shared. There are some extras bells and whistles for convenience, such as being able to declare variables and directly reference envrionment variables.
+The idea is to use variational types to produce different dot-files depending on the configuration (i.e. a laptop or a desktop), avoiding the need to duplicating code. There are some extras bells and whistles for convenience, such as being able to declare variables and directly referencing envrionment variables.
 
 ## USAGE
 an example of a .gitconfig using a dimension to configure autocrlf:
@@ -40,6 +40,18 @@ email = foo@bar.com
 
 [core]
 autocrl = false
+```
+
+the full syntax:
+```
+Terms := Term*
+Term  :=  #$IDENTIFIER#                      // variables
+       |  #$$ENV_VAR#                        // environment variables
+       | `#DIMID{` Terms (`##` Terms)* `}#`  // Dimensions
+       |  Text                               // anything else
+
+DIMID := (alpha | `_`)(alphanumeric | `_`)*
+IDENTIFIER := (alphanumeric | [!%&'*+-./:<=>?@_])+
 ```
 
 ## CONFIG
