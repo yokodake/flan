@@ -308,13 +308,11 @@ pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io:
         );
         return Err(io::Error::new(io::ErrorKind::AlreadyExists, msg));
     }
-    if file.destination == PathBuf::from("<stdout>") {
-        emit_error!(
-            "Writing to standard output not supported yet. Writing to file `./flan.stdout` instead"
-        );
-        dest = PathBuf::from("flan.stdout");
-    }
-    let mut out_f = fs::File::create(&dest)?;
+    let mut out_f : Box<io::Write> = if file.destination == PathBuf::from("<stdout>") {
+        Box::new(io::stdout())
+    } else {
+        Box::new(fs::File::create(&dest)?)
+    };
     write_terms(terms, &mut reader, &mut out_f, file.start.as_usize(), env)?;
     Ok(())
 }

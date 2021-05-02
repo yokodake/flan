@@ -107,7 +107,9 @@ fn main() {
         Ok(n) => metrics.copied(n),
     }
     metrics.end(start);
-    metrics.report();
+    if (!flags.stdin.is_some()) {
+        metrics.report();
+    }
 }
 
 use std::time::{Duration, Instant};
