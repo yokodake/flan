@@ -423,8 +423,9 @@ fn get_subpaths(dir: impl AsRef<Path>, src: &PathBuf, dst: &PathBuf) -> io::Resu
 pub fn make_cfgflags() -> Result<(cfg::Flags, cfg::Config), cfg::Error> {
     use cfg::StructOpt;
     let opt = cfg::Opt::from_args();
+    // @FIXME use dimensions in config file
     let file = cfg::path_to_cfgfile(opt.config_file.as_ref())?;
-    // @TODO finer grained error reporting. (see previous commit in main.rs)
+    // @TODO finer grained error reporting. 
     let decisions = opt.parse_decisions()?;
     Ok((
         cfg::Flags::new(&opt, file.options.as_ref()),

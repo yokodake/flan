@@ -1,5 +1,7 @@
 /target
 \#*\#
+\#*
+*.swp
 .vscode/settings.json
 
 .flan
