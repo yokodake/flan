@@ -31,7 +31,7 @@ pub fn make_env(config: &cfg::Config, handler: Handler) -> Result<Env, Handler> 
     let err_diff = handler.err_count;
     for (dn, chs) in decl_dim {
         let r = match chs {
-            Choices::Names(ons) => handle_named(&dn, ons, names, pairs, &mut handler),
+            Choices::Names(chns) => handle_named(&dn, chns, names, pairs, &mut handler),
             Choices::Size(i) => handle_sized(&dn, i, pairs, &mut handler),
         };
         match r {
@@ -58,47 +58,53 @@ pub fn make_env(config: &cfg::Config, handler: Handler) -> Result<Env, Handler> 
     Err(handler)
 }
 
-/// handle named Index for [`make_env`]
+/// handle named choices of declared dimension for [`make_env`]
 fn handle_named<'a>(
     dn: &str,
-    ons: Vec<String>,
-    names: &HashSet<String>,
-    idxs: &HashMap<String, Index>,
+    chns: Vec<String>,
+    names: &HashSet<String>,        // standalone decision names
+    pairs: &HashMap<String, Index>, // `dimension=decision` pairs
     handler: &'a mut Handler,
 ) -> Result<Dim, ErrorBuilder<'a>> {
     use std::fmt::Write;
-    // we keep this binding (instead of only `ni`) for error repoorting
-    let idx = idxs.get(dn);
-    let mut ni = maybe_idx(idx, &ons);
+    // we keep this binding for error reporting
+    let idx = pairs.get(dn);
+    let mut ni = maybe_idx(idx, &chns);
     // list of valid decisions for the current dimension
     let mut found = Vec::new();
-    // if there's a conflict between `idx` and a `chs`
+    // conflict between `names` and `pairs => ni`
     let mut conflict = false;
 
-    for (p, on) in ons.iter().enumerate() {
-        if !names.contains(on) {
-            continue;
-        }
-        if ni.map_or(false, |(n, _)| n != on) {
-            conflict = true
-        }
-        if ni.map_or(false, |(n, _)| n == on) {
-            handler
-                .warn(
-                    format!(
-                        "decisions `{}` and `{}={}` are redundant.",
-                        on,
-                        &dn,
-                        idx.unwrap()
+    for (p, chn) in chns.iter().enumerate() {
+        if names.contains(chn) {
+            // if the decision we found in the `pairs` is different than the one we found in `names`
+            // we have a conflict.
+            if ni.map_or(false, |(n, _)| n != chn) {
+                conflict = true
+            }
+            // if there is both a standalone and pair for the same decision, it's redundant
+            if ni.map_or(false, |(n, _)| n == chn) {
+                handler
+                    .warn(
+                        format!(
+                            "decisions `{}` and `{}={}` are redundant.",
+                            chn,
+                            &dn,
+                            idx.unwrap()
+                        )
+                        .as_ref(),
                     )
-                    .as_ref(),
-                )
-                .print();
+                    .print();
+            }
+            if ni.is_none() {
+                ni = Some((chn, p as u8));
+            }
+        } else {
+            if ni.map_or(true, |(n, _)| n != chn) {
+                continue;
+            }
         }
-        if ni.is_none() {
-            ni = Some((on, p as u8));
-        }
-        found.push(on);
+        found.push(chn);
     }
     // @SAFETY: write! does not fail on Strings
     #[allow(unused_must_use)]
@@ -106,10 +112,10 @@ fn handle_named<'a>(
         // if conflicting decisions
         let mut msg = String::from("the following choices are conflicting: ");
         let mut it = found.iter();
-        if conflict {
+        if conflict { // @SAFETY unwrap(): conflict = true, implies that `ni.is_some` (which implies `idx.is_some`)
             write!(&mut msg, "{}={}", &dn, idx.unwrap());
-        } else {
-            write!(&mut msg, "{}", it.next().unwrap());
+        } else { // @SAFETY unwrap(): found.len() > 1
+            write!(&mut msg, "{}", it.next().unwrap());  
         }
         for &i in it {
             write!(&mut msg, ", {}", i);
@@ -117,17 +123,19 @@ fn handle_named<'a>(
         Err(handler.error(msg.as_ref()))
     } else if !conflict && found.len() == 0 {
         // if no decision for declared dimension
+        // @NOTE should this be a warning instead?
         Err(handler.note(format!("no decision found for declared dimension `{}`.", dn).as_ref()))
     } else {
         // !conflict && found.len() == 1
         Ok(Dim {
-            choices: ons.len() as i8,
+            choices: chns.len() as i8,
+            // @DOC: unwrap safety
             decision: ni.unwrap().1,
         })
     }
 }
 
-/// handle Sized Index for [`make_env`]
+/// handle Sized dimension declaration for [`make_env`]
 fn handle_sized<'a>(
     dn: &str,
     size: u8,
@@ -420,7 +428,7 @@ fn get_subpaths(dir: impl AsRef<Path>, src: &PathBuf, dst: &PathBuf) -> io::Resu
 /* cfg */
 
 /// build a new Config and Flags, from arguments and config file
-pub fn make_cfgflags() -> Result<(cfg::Flags, cfg::Config), cfg::Error> {
+pub fn mk_cfgflags() -> Result<(cfg::Flags, cfg::Config), cfg::Error> {
     use cfg::StructOpt;
     let opt = cfg::Opt::from_args();
     let file = cfg::path_to_cfgfile(opt.config_file.as_ref())?;
