@@ -20,7 +20,7 @@ use crate::{
 
 /// helper to make an env from config file (`variables` and `decl_dim`) and cmd line options
 /// (`chs` and `idxs`)
-pub fn make_env(config: &cfg::Config, handler: Handler) -> Option<Env> {
+pub fn make_env(config: &cfg::Config, handler: Handler) -> Result<Env, Handler> {
     let variables = config.variables.clone();
     let decl_dim = config.dimensions.clone();
     let names = &config.decisions_name;
@@ -52,10 +52,10 @@ pub fn make_env(config: &cfg::Config, handler: Handler) -> Option<Env> {
         let mut env = Env::new(HashMap::from_iter(variables), dimensions, handler);
         // @SPEEDUP don't clone
         fill_env(pairs.clone(), &mut env);
-        return Some(env);
+        return Ok(env);
     }
     handler.print_all();
-    None
+    Err(handler)
 }
 
 /// handle named Index for [`make_env`]

@@ -16,7 +16,7 @@ fn main() {
     use flan::driver::*;
     let mut metrics = Metrics::new();
 
-    let (flags, config) = match make_cfgflags() {
+    let (flags, config) = match mk_cfgflags() {
         Ok(f) => f,
         Err(e) => {
             // @IMPROVEMENT error handling
@@ -42,9 +42,11 @@ fn main() {
     metrics.front(start);
 
     let start = Instant::now();
-    // @TODO handle errors
     let he = Handler::new(flags.eflags, source_map.clone());
-    let mut env = make_env(&config, he).unwrap();
+    let mut env = match make_env(&config, he) {
+        Err(mut he) => he.abort(),
+        Ok(e) => e,
+    };
 
     if flags.command == Command::Query {
         let mut h = Handler::new(flags.eflags, source_map.clone());
