@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use flan::{debug, emit_error};
+use flan::{emit_error};
 use flan::cfg::Command;
 #[allow(unused_imports)]
 use flan::error::Handler;
@@ -107,7 +107,7 @@ fn main() {
         Ok(n) => metrics.copied(n),
     }
     metrics.end(start);
-    if (!flags.stdin.is_some()) {
+    if !flags.stdin.is_some() {
         metrics.report();
     }
 }

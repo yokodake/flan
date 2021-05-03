@@ -300,7 +300,7 @@ pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io:
     } else {
         Box::new(io::BufReader::new(fs::File::open(&file.path)?))
     };
-    let mut dest = file.destination.clone();
+    let dest = &file.destination;
     if !flags.force && file.destination.exists() {
         let msg = format!(
             "error: file `{}` already exists. [use --force to overwrite]",
@@ -308,10 +308,10 @@ pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io:
         );
         return Err(io::Error::new(io::ErrorKind::AlreadyExists, msg));
     }
-    let mut out_f : Box<io::Write> = if file.destination == PathBuf::from("<stdout>") {
+    let mut out_f : Box<dyn io::Write> = if file.destination == PathBuf::from("<stdout>") {
         Box::new(io::stdout())
     } else {
-        Box::new(fs::File::create(&dest)?)
+        Box::new(fs::File::create(dest)?)
     };
     write_terms(terms, &mut reader, &mut out_f, file.start.as_usize(), env)?;
     Ok(())
@@ -423,7 +423,6 @@ fn get_subpaths(dir: impl AsRef<Path>, src: &PathBuf, dst: &PathBuf) -> io::Resu
 pub fn make_cfgflags() -> Result<(cfg::Flags, cfg::Config), cfg::Error> {
     use cfg::StructOpt;
     let opt = cfg::Opt::from_args();
-    // @FIXME use dimensions in config file
     let file = cfg::path_to_cfgfile(opt.config_file.as_ref())?;
     // @TODO finer grained error reporting. 
     let decisions = opt.parse_decisions()?;
