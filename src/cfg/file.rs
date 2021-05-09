@@ -51,6 +51,7 @@ impl Default for File {
 }
 /// default values for command-line optional arguments.
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "kebab-case")]
 pub struct Options {
     /// overwrite destination files if they already exist?
     pub force: Option<bool>,

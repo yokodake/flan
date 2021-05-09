@@ -61,8 +61,8 @@ The configuration file uses a TOML syntax and the following things can be specif
 force = false        # overwrite destination files
 verbosity = 5        # see: `flan::cfg::ErrorFlags::report_level`
 ignore_unset = false # ignores unset variables (will be substituted by blank string)
-in_prefix = "./src/"     # prefix directory for input paths
-out_prefix = "./dist/"    # prefix directory for output paths
+in-prefix = "./src/"     # prefix directory for input paths
+out-prefix = "./dist/"    # prefix directory for output paths
 
 [variables]
 hostname = "foo"
