@@ -37,8 +37,6 @@ pub struct Parser<'a> {
         nest: u8,
     /// absolute position in source map
     pub offset: Pos,
-    /// current dimension we're parsing (for domination)  
-        ctx : Ctx
 }
 impl Parser<'_> {
     pub fn new<'a>(h: &'a mut Handler, input: String, ts: TokenStream, offset: Pos) -> Parser<'a> {
@@ -49,7 +47,6 @@ impl Parser<'_> {
             src: input,
             nest: 0,
             offset,
-            ctx: Ctx::default()
         };
         p.next_token();
         p
@@ -144,24 +141,17 @@ impl Parser<'_> {
         let start = self.current_token.span;
         let name = self.get_dim_name();
         self.next_token(); // eat Opend
-        self.ctx.enter(name.clone()); // enter a new scope
         let mut cs : Vec<Terms> = Vec::new();
         loop {
             let c : Terms = self.parse_terms()?;
             match self.current_token.kind() {
                 TokenK::Closed => {
                     cs.push(c);
-                    self.ctx.exit(&name);
-                    match self.ctx.find(&name) { 
-                        None => return Ok(Term::dim(name, cs, start + self.current_token.span)),
-                        // perform domination
-                        Some(Scope{child,..}) => return Ok(cs.get(child).expect("conflicting child count")),
-                    }
+                    return Ok(Term::dim(name, cs, start + self.current_token.span));
                 }
                 TokenK::Sepd => {
                     cs.push(c);
                     self.next_token(); // eat Sepd
-                    self.ctx.next_child(); // change child in dimension
                     continue;
                 }
                 TokenK::EOF => {
@@ -261,47 +251,3 @@ pub enum TermK {
 }
 
 pub type TokenStream = VecDeque<Token>;
-
-/// @SPEED this will incur extra string copies and comparisons... 
-///        to fix copies we need a form of Arena, as the String will be owned by Term too
-///        (Since the caller of `parse` could drop as soon as it returns the Term)
-///        to fix comparisons a symbol table could be used
-///        ...the symbol table could use the arena to fix both
-struct Scope {
-    dim  : String,
-    child: u8,
-}
-#[derive(Default)]
-struct Ctx(VecDeque<Scope>);
-impl AsRef<VecDeque<Scope>> for Ctx {
-    fn as_ref(&self) -> &VecDeque<Scope> {
-        &self.0
-    }
-}
-impl Ctx {
-    fn push(&mut self, scope: Scope) {
-        self.0.push_front(scope);
-    }
-    fn pop(&mut self) -> Option<Scope> {
-        self.0.pop_front()
-    }
-    /// enter a new scope
-    fn enter(&mut self, dim: String) {
-        self.push(Scope{dim, child: 0})
-    }
-    /// bump the child counter
-    fn next_child(&mut self) -> bool {
-        match self.0.front_mut() { 
-            None => false,
-            Some(Scope{child, ..}) => {
-                *child += 1;
-                true
-            },
-        }
-    }
-    /// exit the current scope
-    fn exit(&mut self, name: &str) {
-        let n = self.pop().expect("expected non-empty Ctx");
-        assert!(name == n.dim);
-    }
-}

@@ -20,10 +20,10 @@ use crate::sourcemap::{Span, Spanned};
 use crate::syntax::{Name, TermK, Terms};
 
 /// typecheck and infer (by mutating `env`) choices and dimensions.
-pub fn check(terms: &Terms, env: &mut Env) -> Option<()> {
+pub fn check(terms: &mut Terms, env: &mut Env) -> Option<()> {
     let mut errors = false;
     for term in terms {
-        match &term.node {
+        match &mut term.node {
             TermK::Text => {}
             TermK::Var(name) => {
                 if !env.eflags().ignore_unset && !env.variables.contains_key(name) {
@@ -37,10 +37,10 @@ pub fn check(terms: &Terms, env: &mut Env) -> Option<()> {
             TermK::Dimension { name, children } => match env.dimensions.get_mut(name) {
                 Some(d) => {
                     if !d.try_set_dim(children.len() as i8) {
-                        error_size_conflict(&mut env.handler, name, term.opend_span().unwrap());
+                        error_size_conflict(&mut env.handler, name, term.span.subspan(0, name.len() - 1));
                         errors = true;
                     }
-                    for c in children {
+                    for c in children.iter_mut() {
                         errors = check(c, env).is_none() || errors;
                     }
                 }

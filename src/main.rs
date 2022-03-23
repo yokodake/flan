@@ -37,7 +37,7 @@ fn main() {
             .print();
         std::process::exit(SUCCESS);
     }
-    let (trees, bins) = parse_sources(sources, &mut hp);
+    let (mut trees, bins) = parse_sources(sources, &mut hp);
     metrics.front(start);
 
     let start = Instant::now();
@@ -52,7 +52,7 @@ fn main() {
         for (dim, ch) in collect_dims(&mut trees.iter().map(|t| &t.1), &mut h, &config.dimensions) {
             println!("{}", pp_dim(&dim, &ch));
         }
-    } else if trees.iter().fold(false, |acc, (_, tree)| {
+    } else if trees.iter_mut().fold(false, |acc, (_, tree)| {
         infer::check(tree, &mut env).is_none() || acc
     }) {
         env.handler.abort();
