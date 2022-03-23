@@ -1,7 +1,6 @@
 #![feature(type_ascription)]
 #![feature(option_result_contains)]
 #![feature(result_flattening)]
-#![feature(duration_zero)]
 #![feature(format_args_nl)]
 
 use std::sync::Arc;

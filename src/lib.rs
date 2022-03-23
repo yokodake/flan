@@ -1,10 +1,7 @@
-#![feature( bufreader_seek_relative
+#![feature( format_args_nl
           , new_uninit
-          , try_trait
-          , type_ascription
-          , int_error_matching
           , option_result_contains
-          , format_args_nl
+          , type_ascription
           )]
 
 #[macro_use]
