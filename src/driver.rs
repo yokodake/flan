@@ -192,6 +192,7 @@ pub fn fill_env(decisions: HashMap<String, Index>, env: &mut Env) {
 /* syntax */
 
 /// Does not fail, only report. Caller should check if all sources passed yielded Terms
+/// @FIXME this is bad design... We should still use Option or Result
 pub fn parse_sources(
     sources: Vec<SrcFile>,
     h: &mut Handler,
@@ -275,6 +276,7 @@ pub fn collect_dims<'a, It: Iterator<Item = &'a Terms>>(
         .collect()
 }
 
+/// pretty print dimension
 pub fn pp_dim(dim: &Name, ch: &Choices) -> String {
     // @SAFETY write does not fail on `String`
     #![allow(unused_must_use)]
