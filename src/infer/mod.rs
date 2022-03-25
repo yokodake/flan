@@ -15,34 +15,32 @@ pub use errors::Error;
 
 use std::collections::HashMap;
 
-use crate::error::Handler;
-use crate::sourcemap::{Span, Spanned};
-use crate::syntax::{Name, TermK, Terms};
+use crate::error::{Handler, ErrorBuilder};
+use crate::sourcemap::Span;
+use crate::syntax::{Name, TermK, Terms, Term};
 
-/// typecheck and infer (by mutating `env`) choices and dimensions.
-pub fn check(terms: &Terms, env: &mut Env) -> Option<()> {
-    let mut errors = false;
-    for term in terms {
-        match &term.node {
-            TermK::Text => {}
-            TermK::Var(name) => {
-                if !env.eflags().ignore_unset && !env.variables.contains_key(name) {
-                    env.handler
-                        .error(format!("Undeclared variable `{}`.", name).as_ref())
-                        .with_span(term.span)
-                        .print();
-                    errors = true;
-                }
-            }
-            TermK::Dimension { name, children } => match env.dimensions.get_mut(name) {
+//// typecheck and infer (by mutating `env`) choices and dimensions.
+pub fn check<'a>(terms: &Terms, env: &'a mut Env) -> (bool, &'a mut Env) {
+    traverse(terms, (false, env), &check_pass)
+}
+fn check_pass<'a>(term: &Term, (mut err, env): (bool, &'a mut Env)) -> (bool, &'a mut Env) {
+    match &term.node {
+        TermK::Text => {},
+        TermK::Var(name) => {
+            if !env.eflags().ignore_unset && !env.variables.contains_key(name) {
+                env.handler
+                   .error(format!("Undeclared variable `{}`.", name).as_ref())
+                   .with_span(term.span)
+                   .print();
+                err = true;
+            } 
+        },
+        TermK::Dimension { name, children } => match env.dimensions.get_mut(name) {
                 Some(d) => {
                     if !d.try_set_dim(children.len() as i8) {
-                        error_size_conflict(&mut env.handler, name, term.opend_span().unwrap());
-                        errors = true;
-                    }
-                    for c in children {
-                        errors = check(c, env).is_none() || errors;
-                    }
+                        error_size_conflict(&mut env.handler, name, term.span.subspan(0, name.len() - 1)).print();
+                        err = true;
+                    } 
                 }
                 None => {
                     env.handler
@@ -51,52 +49,79 @@ pub fn check(terms: &Terms, env: &mut Env) -> Option<()> {
                         .note("Decision inference is not supported yet. This dimension requires a decision given explicitly.")
                         .note("Postponed dimension declaration (in source files) is not supported yet.")
                         .print();
-                    errors = true;
+                    err = true;
                 }
-            },
         }
     }
-    if errors {
-        None
-    } else {
-        Some(())
-    }
+    (err, env)
 }
+
+pub type DMap = HashMap<Name, u8>;
 
 /// returns all the dimensions used and their size & report conflicts
 /// @REFACTOR merge with [`check`] ?
-pub fn collect<'a>(
-    terms: &Terms,
-    handler: &mut Handler,
-    dims: &'a mut HashMap<Name, u8>,
-) -> &'a mut HashMap<Name, u8> {
-    for Spanned { node, span } in terms {
-        match node {
-            TermK::Text | TermK::Var(_) => {}
-            TermK::Dimension { name, children } => {
-                match dims.get(name) {
-                    Some(&size) if size != children.len() as u8 => {
-                        error_size_conflict(handler, name, *span);
-                    }
-                    None => {
-                        dims.insert(name.clone(), children.len() as u8);
-                    }
-                    _ => {}
+pub fn check_collect<'a>(terms: &Terms, dims: &'a mut DMap, env: &'a mut Env) -> (&'a mut DMap, bool, &'a mut Env) {
+    traverse(terms, (dims, false, env), &check_collect_pass)
+}
+pub fn check_collect_pass<'a>(
+    term: &Term,
+    (dims, err, env) : (&'a mut DMap, bool, &'a mut Env),
+) -> (&'a mut DMap, bool, &'a mut Env) {
+    let (err, env) = check_pass(term, (err, env));
+    if err { // do not collect if there are errors
+        return (dims, err, env);
+    }
+    match &term.node {
+        TermK::Text | TermK::Var(_) => {}
+        TermK::Dimension { name, children } => {
+            match dims.get(name) {
+                None => {
+                    dims.insert(name.clone(), children.len() as u8);
                 }
-
-                for c in children {
-                    collect(c, handler, dims);
-                }
+                _ => {}
             }
         }
     }
-    dims
+    (dims, err, env)
 }
 
-pub fn error_size_conflict(handler: &mut Handler, name: &String, span: Span) {
+/// helper for dimension size conflicts errors
+fn error_size_conflict<'a>(handler: &'a mut Handler, name: &String, span: Span) -> ErrorBuilder<'a> {
     // @TODO get span of declaration or previous use
     handler
         .error(format!("Conflicting number of choices for dimension `{}`.", name).as_ref())
         .with_span(span)
-        .print();
+}
+
+pub fn traverse<F, T>(terms: &Terms, z: T, transform: &F) -> T
+where F : Fn(&Term, T) -> T {
+    let mut acc = z;
+    for term in terms {
+        acc = transform(term, acc);
+        match &term.node {
+            TermK::Dimension { children , .. } => {
+                for child in children {
+                    acc = traverse(child, acc,  transform);
+                }
+            } 
+            _ => {}
+        }
+    }
+    acc
+}
+pub fn traverse_mut<F, T>(terms: &mut Terms, z: T, transform: &F) -> T
+where F : Fn(&mut Term, T) -> T {
+    let mut acc = z;
+    for term in terms {
+        acc = transform(term, acc);
+        match &mut term.node {
+            TermK::Dimension { children , .. } => {
+                for child in children {
+                    acc = traverse_mut(child, acc,  transform);
+                }
+            } 
+            _ => {}
+        }
+    }
+    acc
 }

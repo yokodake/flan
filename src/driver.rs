@@ -259,12 +259,12 @@ pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> Option<Parser<
 /// see [`cfg::opts::Opt::query_dims`]
 pub fn collect_dims<'a, It: Iterator<Item = &'a Terms>>(
     trees: &mut It,
-    h: &mut Handler,
+    env: &mut Env,
     declared_dims: &HashMap<Name, Choices>,
 ) -> Vec<(Name, Choices)> {
     let mut map = HashMap::new();
     for ref terms in trees {
-        infer::collect(terms, h, &mut map);
+        infer::check_collect(terms, &mut map, env);
     }
     // @NOTE is checking conflict between declared_dims here needed?
     map.into_iter()

@@ -47,14 +47,15 @@ fn main() {
         Ok(e) => e,
     };
 
+    // infer/check dimensions and collect+report if needed.
     if flags.command == Command::Query {
-        let mut h = Handler::new(flags.eflags, source_map.clone());
-        for (dim, ch) in collect_dims(&mut trees.iter().map(|t| &t.1), &mut h, &config.dimensions) {
+        let terms = &mut trees.iter().map(|t| &t.1);
+        for (dim, ch) in collect_dims(terms, &mut env, &config.dimensions) {
             println!("{}", pp_dim(&dim, &ch));
         }
-    } else if trees.iter().fold(false, |acc, (_, tree)| {
-        infer::check(tree, &mut env).is_none() || acc
-    }) {
+    } else if trees.iter()
+                   .fold(false, |acc, (_, tree )| {
+                        infer::check(tree, &mut env).0 || acc }) {
         env.handler.abort();
     }
     metrics.infer(start);
