@@ -1,6 +1,6 @@
 //! Position in Sourcefile
 
-use std::ops::{Add, AddAssign, Sub, SubAssign, Range, RangeInclusive};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 pub type BytePosInner = u64;
 /// A BytePosition inside a sourcemap.

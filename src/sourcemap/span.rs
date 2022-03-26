@@ -1,7 +1,7 @@
 //! Spans and BytePositions in source files (map).
 
 pub use super::pos::{BytePos, BytePosInner};
-use std::ops::{Add, AddAssign, Sub, SubAssign, Range, RangeInclusive};
+use std::ops::{Add, Range, RangeInclusive};
 
 /// an span inside the sourcemap
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
