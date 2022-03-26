@@ -1,3 +1,4 @@
+pub mod utils;
 mod bugs {
     mod bug1;
     mod bug2;

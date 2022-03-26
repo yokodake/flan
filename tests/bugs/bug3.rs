@@ -1,22 +1,12 @@
 // variable and dimension names not parsed correctly
 
-use flan::driver::source_to_stream;
-use flan::driver::string_to_parser;
+use flan::driver::{source_to_stream, string_to_parser};
 use flan::error::{ErrorFlags, Handler};
-use flan::sourcemap::{Spanned, SrcMap};
+use flan::sourcemap::SrcMap;
+use flan::syntax::TokenStream;
 use flan::syntax::lexer::TokenK;
-use flan::syntax::{TermK, Terms, TokenStream};
 
-type Kinds = Vec<Kind>;
-#[derive(Clone, PartialEq, Debug)]
-enum Kind {
-    /// Text
-    Txt,
-    /// variable
-    Var(String),
-    /// dimension name
-    Dim(String, Vec<Kinds>),
-}
+use crate::utils::{Kind, get_kinds};
 
 static SRC: &str = "begin #$var1##$var2#a txt #dim1{#dim2{#$var/var# text ###dim1{text ##txt & #$var#}### some other text}# end 1st br.##2nd br txt}# end.";
 fn expected_tokens() -> Vec<TokenK> {
@@ -77,23 +67,4 @@ pub fn nesting_lexing() {
 
 fn get_tokens(ts: TokenStream) -> Vec<TokenK> {
     ts.iter().map(|t| t.node).collect()
-}
-
-fn get_kinds(ts: Terms) -> Kinds {
-    use Kind::*;
-    let mut v = Vec::new();
-    for Spanned { node, span: _ } in ts {
-        match node {
-            TermK::Text => v.push(Txt),
-            TermK::Var(n) => v.push(Var(n)),
-            TermK::Dimension { name, children } => {
-                let mut cs = Vec::new();
-                for c in children {
-                    cs.push(get_kinds(c));
-                }
-                v.push(Dim(name, cs))
-            }
-        }
-    }
-    v
 }

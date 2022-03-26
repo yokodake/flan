@@ -1,3 +1,4 @@
+use TokenK::Opend;
 use flan::error::{ErrorFlags, Handler};
 use flan::sourcemap::SrcMap;
 use flan::syntax::lexer::{Token, TokenK};
@@ -73,14 +74,14 @@ fn parse_vars() {
     assert!(r_ts.is_ok());
     let ts = r_ts.unwrap();
     let expected = vec![
-        Txt,
-        Var("_var1".into()),
-        Txt,
-        Var("_2".into()),
-        Txt,
-        Dim("dim".into(), vec![vec![Var("inside".into())], vec![Txt]]),
-        Txt,
-        Var("last_var".into()),
+        ktxt(),
+        kvar("_var1"),
+        ktxt(),
+        kvar("_2"),
+        ktxt(),
+        kdim("dim", vec![vec![kvar("inside")], vec![Txt]]),
+        ktxt(),
+        kvar("last_var"),
     ];
     assert_eq!(expected, get_kinds(ts));
 }
@@ -102,33 +103,30 @@ fn nothing() {
 }
 #[test]
 fn one_var() {
-    use Kind::*;
     let src = "#$foo#";
     let r_ts = parse_str(src);
     assert!(r_ts.is_ok());
     let ts = r_ts.unwrap();
-    let expected = vec![Var("foo".into())];
+    let expected = vec![kvar("foo")];
     assert_eq!(expected, get_kinds(ts));
 }
 #[test]
 fn empty_choices() {
-    use Kind::*;
     let src = "#foo{##}#";
     let r_ts = parse_str(src);
     assert!(r_ts.is_ok());
     let ts = r_ts.unwrap();
-    let expected = vec![Dim("foo".into(), vec![vec![], vec![]])];
+    let expected = vec![kdim("foo", vec![vec![], vec![]])];
     assert_eq!(expected, get_kinds(ts));
 }
 
 #[test]
 fn one_empty_choice() {
-    use Kind::*;
     let src = "#foo{}#";
     let r_ts = parse_str(src);
     assert!(r_ts.is_ok());
     let ts = r_ts.unwrap();
-    let expected = vec![Dim("foo".into(), vec![vec![]])];
+    let expected = vec![kdim("foo", vec![vec![]])];
     assert_eq!(expected, get_kinds(ts));
 }
 
@@ -221,4 +219,36 @@ fn one_char_txt() {
         Token::new(EOF, src.len(), src.len()),
     ];
     assert_eq!(expected, toks);
+}
+
+#[test]
+/// write_tests.rs::big_dim_txt failure
+fn regtest_big_dim_txt() {
+    let src = "#dim2{hello, world ## ignored ##hello, #$name#}# from 2hu"; 
+    let expected = vec![
+        Token::new(Opend, 0, 0)
+        ];
+    let expected = vec![kdim("dim2", 
+                                    vec![vec![ktext("hello, world")], 
+                                         vec![ktext("ignored")],
+                                         vec![ktext("hello, "), kvar("name")]
+                                    ])
+                                 ,ktext(" from 2hu")];
+    let r_ts = parse_str(src);
+    assert!(r_ts.is_ok(), "parsing failed");
+    let ts = r_ts.unwrap();
+    assert_eq!(expected, get_full_kinds(ts, src));
+}
+#[test]
+/// write_tests.rs::escapes failure
+fn regtest_escapes() {
+    let src = "good morning, #$name# \\\\o \\#ItBack";
+    let expected = vec![ktext("good morning, "),
+                                  kvar("name"),
+                                  ktext("\\o #Itback"),
+                                 ];
+    let r_ts = parse_str(src);
+    assert!(r_ts.is_ok());
+    let ts = r_ts.unwrap();
+    assert_eq!(expected, get_full_kinds(ts, src));
 }
