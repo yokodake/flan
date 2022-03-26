@@ -16,7 +16,7 @@
 use core::str::Chars;
 
 use crate::error::Handler;
-use crate::sourcemap::{span, Pos, Spanned};
+use crate::sourcemap::{span, BytePos, Spanned};
 use crate::syntax;
 
 /// parser error
@@ -26,7 +26,7 @@ pub struct Lexer<'a> {
     pub handler: &'a mut Handler,
     src: Chars<'a>,
     /// current position in reader (index of `current`)
-    pos: Pos,
+    pos: BytePos,
     /// next token = peek0
     next: Option<char>,
     /// current token
@@ -46,7 +46,7 @@ static VAR_SYMS: [char; 16] = [
 
 impl<'a> Lexer<'a> {
     /// `Lexer.prev` is not valid, set to null
-    pub fn new(h: &'a mut Handler, input: &'a str, offset: Pos) -> Lexer<'a> {
+    pub fn new(h: &'a mut Handler, input: &'a str, offset: BytePos) -> Lexer<'a> {
         let mut l = Lexer {
             src: input.chars(),
             // current position, therefore the index of the result of getc()
@@ -65,14 +65,15 @@ impl<'a> Lexer<'a> {
     pub fn failed(&self) -> bool {
         self.failure
     }
-    /// get the next character without consuming it
+    /// get the next character without consuming it  
+    /// @TODO rename/rethink the peek APIs
     fn peek0(&self) -> char {
         self.next.unwrap_or('\0')
     }
     fn peek1(&self) -> char {
         self.peek(0)
     }
-    /// get the nth character without consuming any
+    /// EXPENSIVE get the nth character without consuming any
     fn peek(&self, n: usize) -> char {
         self.src.clone().nth(n).unwrap_or('\0') // EOF
     }
@@ -82,6 +83,7 @@ impl<'a> Lexer<'a> {
         self.current = self.next;
         self.next = self.src.next();
         // @FIXME don't increment more than once
+        // @FIXME is this correct... if we're None it should be zero???
         self.pos += self.current.map_or(1, char::len_utf8);
         self.current.clone()
     }
@@ -160,10 +162,10 @@ impl<'a> Lexer<'a> {
         c.is_alphanumeric() || VAR_SYMS.contains(&c)
     }
     /// Makes a [`TokenK::Text`] from `start` to `self.pos - 1`
-    pub fn lex_txt(&self, start: Pos) -> Token {
+    pub fn lex_txt(&self, start: BytePos) -> Token {
         Token::new(Text, start, self.pos - 1)
     }
-    pub fn lex_var(&mut self, start: Pos) -> Token {
+    pub fn lex_var(&mut self, start: BytePos) -> Token {
         let mut ill_char = false;
 
         self.bump(); // eat '#'
@@ -205,7 +207,7 @@ impl<'a> Lexer<'a> {
         // but dunno of a clean way
         Token::new(Var, start, self.pos - 1)
     }
-    pub fn lex_opend_maybe(&mut self, start: Pos) -> Option<Token> {
+    pub fn lex_opend_maybe(&mut self, start: BytePos) -> Option<Token> {
         // eat opening '#'
         self.bump();
         while let Some(c) = self.current {
@@ -222,7 +224,7 @@ impl<'a> Lexer<'a> {
         }
         None
     }
-    pub fn lex_closed(&mut self, start: Pos) -> Token {
+    pub fn lex_closed(&mut self, start: BytePos) -> Token {
         // Just prevent underflow. The parser will catch the error.
         // should be asserts?
         self.bump(); // eat '}'
@@ -230,7 +232,7 @@ impl<'a> Lexer<'a> {
         self.nest = std::cmp::max(self.nest, 1) - 1;
         Token::new(Closed, start, self.pos - 1)
     }
-    pub fn lex_sepd(&mut self, start: Pos) -> Token {
+    pub fn lex_sepd(&mut self, start: BytePos) -> Token {
         self.bump(); // eat the '#'
         self.bump(); // eat the '#'
         Token::new(Sepd, start, self.pos - 1)
@@ -274,7 +276,7 @@ impl Token {
 }
 impl Default for Token {
     fn default() -> Token {
-        Token::new(EOF, Pos::from(0), Pos::from(0))
+        Token::new(EOF, BytePos::from(0), BytePos::from(0))
     }
 }
 

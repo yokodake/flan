@@ -80,3 +80,4 @@ os = 2               # dimensions "os" with unnamed choices of size 2
 * error message in config file (currently `fatal error: <toml parser error>`)
 * better inference
 * on call-site/scoped dimension declaration
+

@@ -25,26 +25,29 @@ pub struct File {
     /// Source or its state
     pub src: SourceInfo,
     /// start positions of lines, **relative to [`Self::start`]!**
-    pub lines: Vec<Pos>,
-    pub start: Pos,
-    pub end: Pos,
+    pub lines: Vec<BytePos>,
+    /// start in bytes of the source file
+    pub start: BytePos,
+    /// end in bytes of the source file, eclusive (like size)
+    pub end: BytePos,
 }
 impl File {
     /// panics if not a file name
     pub fn new(path: PathBuf, destination: PathBuf, src: SourceInfo) -> File {
         let name = path.file_name().unwrap().to_string_lossy().into();
         let end = match &src {
-            SourceInfo::Source(s) => s.len() - 1,
+            // @NOTE this is correct as [`String::len`] returns length in bytes, not chars
+            SourceInfo::Source(s) => s.len(),
             _ => 1,
         };
         File {
             name,
             path,
             destination,
-            src: src,
+            src,
             lines: Vec::new(),
-            start: Pos(0),
-            end: Pos::from(end),
+            start: BytePos(0),
+            end: BytePos::from(end),
         }
     }
     pub fn is_source(&self) -> bool {
@@ -59,12 +62,12 @@ impl File {
             _ => false,
         }
     }
-    pub fn lookup_line(&self, pos: Pos) -> Option<Loc<'_>> {
+    pub fn lookup_line(&self, pos: BytePos) -> Option<Loc<'_>> {
         use crate::sourcemap as sm;
         let index = self.get_line_num(pos)?;
         let line = self.get_loc(index)?;
         let start = unsafe { self.lines.get_unchecked(index) };
-        let end: Pos = self
+        let end: BytePos = self
             .lines
             .get(index + 1)
             .map(|p| p.clone() - 1)
@@ -74,7 +77,7 @@ impl File {
     }
     /// gets the index of the line containing `pos`.
     /// This is not a line number.
-    pub fn get_line_num(&self, pos: Pos) -> Option<usize> {
+    pub fn get_line_num(&self, pos: BytePos) -> Option<usize> {
         let pos = pos - self.start;
         if self.lines.is_empty() {
             return None;
@@ -102,13 +105,16 @@ impl File {
         }
     }
     pub fn contains(&self, span: Span) -> bool {
-        self.start <= span.lo && self.end >= span.hi
+        self.start <= span.lo && span.hi <= self.end
     }
     pub fn is_stdin(&self) -> bool {
         self.path == PathBuf::from("<stdin>")
     }
     pub fn is_stdout(&self) -> bool {
         self.destination == PathBuf::from("<stdout>")
+    }
+    pub fn size(&self) -> usize {
+        self.end.as_usize() - self.start.as_usize()
     }
 }
 
@@ -133,7 +139,7 @@ impl SrcMap {
     pub fn load_file(&self, path: PathBuf, dest: PathBuf) -> io::Result<SrcFile> {
         let mut file = Self::path_to_file(path, dest)?;
         let start = self.bump_start(file.end.0);
-        file.start = Pos::from(start);
+        file.start = BytePos::from(start);
         file.end += file.start;
         let af = Arc::new(file);
         self.sources.write().unwrap().push(af.clone());
@@ -150,7 +156,7 @@ impl SrcMap {
             ))?;
         }
         let lines;
-        let start = Pos(0);
+        let start = BytePos(0);
         let name = path.file_name().unwrap().to_string_lossy().into();
         let (src, len) = match Self::read_to_string(path.as_path()) {
             Err(e) => {
@@ -175,10 +181,10 @@ impl SrcMap {
             destination, // @TODO absolute path?
             lines,
             start,
-            end: Pos::from(len),
+            end: BytePos::from(len),
         })
     }
-    pub fn anal_src(src: &str, offset: Pos) -> Vec<Pos> {
+    pub fn anal_src(src: &str, offset: BytePos) -> Vec<BytePos> {
         use super::source_analysis::*;
         let mut lines = vec![offset];
         if cfg!(not(any(target_arch = "x86", target_arch = "x86_64"))) {
@@ -213,7 +219,7 @@ impl SrcMap {
             })
             .is_ok()
     }
-    pub fn lookup_source(&self, pos: Pos) -> Option<SrcFile> {
+    pub fn lookup_source(&self, pos: BytePos) -> Option<SrcFile> {
         // should we binary search instead? use a threshold?
         for it in self.sources.read().unwrap().iter() {
             if it.start <= pos {
@@ -222,7 +228,7 @@ impl SrcMap {
         }
         None
     }
-    fn bump_start(&self, size: PosInner) -> u64 {
+    fn bump_start(&self, size: BytePosInner) -> u64 {
         use std::sync::atomic::Ordering;
         self.start.fetch_add(size + 1, Ordering::Relaxed)
     }

@@ -223,10 +223,10 @@ pub fn parse_sources(
 
 /// transform a source into a [`TokenStream`]
 pub fn source_to_stream(h: &mut Handler, src: &str) -> Option<TokenStream> {
-    use crate::sourcemap::Pos;
+    use crate::sourcemap::BytePos;
     // @REFACTOR
     let mut vd = VecDeque::new();
-    let mut lexer = Lexer::new(h, src, Pos::from(0 as usize));
+    let mut lexer = Lexer::new(h, src, BytePos::from(0 as usize));
     loop {
         let t = lexer.next_token();
         vd.push_back(t);
@@ -241,8 +241,8 @@ pub fn source_to_stream(h: &mut Handler, src: &str) -> Option<TokenStream> {
 }
 
 pub fn string_to_parser<'a>(h: &'a mut Handler, str: String) -> Option<Parser<'a>> {
-    use crate::sourcemap::Pos;
-    source_to_stream(h, str.as_ref()).map(move |ts| Parser::new(h, str, ts, Pos::from(0 as usize)))
+    use crate::sourcemap::BytePos;
+    source_to_stream(h, str.as_ref()).map(move |ts| Parser::new(h, str, ts, BytePos::from(0 as usize)))
 }
 
 pub fn file_to_parser<'a>(h: &'a mut Handler, source: SrcFile) -> Option<Parser<'a>> {

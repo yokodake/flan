@@ -18,7 +18,7 @@
 use std::collections::VecDeque;
 
 use crate::error::Handler;
-use crate::sourcemap::{Pos, Span, Spanned};
+use crate::sourcemap::{BytePos, Span, Spanned};
 use crate::syntax::lexer::{Token, TokenK};
 use crate::syntax::Error;
 
@@ -35,10 +35,10 @@ pub struct Parser<'a> {
     /// unmatched open delimiters
     pub nest: u8,
     /// absolute position in source map
-    pub offset: Pos,
+    pub offset: BytePos,
 }
 impl Parser<'_> {
-    pub fn new<'a>(h: &'a mut Handler, input: String, ts: TokenStream, offset: Pos) -> Parser<'a> {
+    pub fn new<'a>(h: &'a mut Handler, input: String, ts: TokenStream, offset: BytePos) -> Parser<'a> {
         let mut p = Parser {
             handler: h,
             current_token: Token::default(),
@@ -182,7 +182,7 @@ impl Parser<'_> {
         }
     }
     /// a source_map relative position to index in the source
-    fn src_idx(&self, p: Pos) -> usize {
+    fn src_idx(&self, p: BytePos) -> usize {
         (p - self.offset).as_usize()
     }
 }
@@ -221,12 +221,12 @@ impl Term {
         match &self.node {
             TermK::Text => None,
             TermK::Var(name) => {
-                let s = self.span.subspan(2, name.len() as u64 - 1);
+                let s = self.span.subspan(2 /* #$ */, name.len() as u64 - 1 /* # */);
                 assert_eq!(s.len(), name.len());
                 Some(s)
             }
             TermK::Dimension { name, .. } => {
-                let s = self.span.subspan(1, name.len());
+                let s = self.span.subspan(1 /* # */, name.len());
                 Some(s)
             }
         }
@@ -234,7 +234,7 @@ impl Term {
     pub fn opend_span(&self) -> Option<Span> {
         match &self.node {
             TermK::Dimension { name, .. } => {
-                let s = self.span.subspan(0, name.len() + 1);
+                let s = self.span.subspan(0, name.len() + 1 /* { */);
                 Some(s)
             }
             _ => None,

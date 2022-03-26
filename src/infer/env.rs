@@ -31,8 +31,6 @@ impl Env {
             handler,
         }
     }
-}
-impl Env {
     pub fn get_var(&self, name: &String) -> Option<&String> {
         self.variables.get(name)
     }

@@ -1,123 +1,22 @@
-//! Spans and Positions in source files (map).
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+//! Spans and BytePositions in source files (map).
 
-pub type PosInner = u64;
-/// A position inside a sourcemap.
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Debug)]
-#[repr(transparent)]
-pub struct Pos(pub PosInner);
-
-/// Won't deal with size errors for now
-macro_rules! pos_from {
-    ( $($TY: ty )+ ) => {
-        $(
-        impl From<$TY> for Pos {
-            fn from(p: $TY) -> Pos {
-                Pos(p as PosInner)
-            }
-        }
-        )+
-    }
-}
-pos_from!( i32 u32 u64 i64 usize isize );
-
-impl Pos {
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
-    }
-    pub fn as_u64(&self) -> u64 {
-        self.0 as u64
-    }
-}
-impl std::fmt::Display for Pos {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Add<Pos> for Pos {
-    type Output = Pos;
-    fn add(self, other: Pos) -> Self::Output {
-        Pos(self.0 + other.0)
-    }
-}
-impl Sub<Pos> for Pos {
-    type Output = Pos;
-    fn sub(self, other: Pos) -> Self::Output {
-        Pos(self.0 - other.0)
-    }
-}
-impl AddAssign<Pos> for Pos {
-    fn add_assign(&mut self, other: Pos) {
-        *self = Pos(self.0 + other.0);
-    }
-}
-impl AddAssign<usize> for Pos {
-    fn add_assign(&mut self, other: usize) {
-        *self = Pos(self.0 + other as PosInner);
-    }
-}
-impl SubAssign<Pos> for Pos {
-    fn sub_assign(&mut self, other: Pos) {
-        *self = Pos(self.0 - other.0);
-    }
-}
-macro_rules! pos_arith {
-    ($($TY:ty)+) => {
-        $(
-            impl Add<$TY> for Pos {
-                type Output = Pos;
-                fn add(self, other: $TY) -> Self::Output {
-                    Pos(self.0 + other)
-                }
-            }
-            impl Add<Pos> for $TY {
-                type Output = Pos;
-                fn add(self, other: Pos) -> Self::Output {
-                    Pos(self + other.0)
-                }
-            }
-            impl Sub<$TY> for Pos {
-                type Output = Pos;
-                fn sub(self, other: $TY) -> Self::Output {
-                    Pos(self.0 - other)
-                }
-            }
-            impl Sub<Pos> for $TY {
-                type Output = Pos;
-                fn sub(self, other: Pos) -> Self::Output {
-                    Pos(self - other.0)
-                }
-            }
-            impl AddAssign<$TY> for Pos {
-                fn add_assign(&mut self, other: $TY) {
-                    *self = *self + other;
-                }
-            }
-            impl SubAssign<$TY> for Pos {
-                fn sub_assign(&mut self, other: $TY) {
-                    *self = *self - other;
-                }
-            }
-        )+
-    };
-}
-pos_arith!(PosInner);
+pub use super::pos::{BytePos, BytePosInner};
+use std::ops::{Add, AddAssign, Sub, SubAssign, Range, RangeInclusive};
 
 /// an span inside the sourcemap
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct Span {
     /// first byte
-    pub lo: Pos,
-    /// *after* last byte
-    pub hi: Pos,
+    pub lo: BytePos,
+    /// *after* last byte => not included
+    pub hi: BytePos,
 }
-/// span ctor from [`Pos`] values
-pub fn span(lo: Pos, hi: Pos) -> Span {
+/// span ctor from [`BytePos`] values
+pub fn span(lo: BytePos, hi: BytePos) -> Span {
     Span { lo: lo, hi: hi }
 }
-/// I'm not sure what the invariants of Add are supposed to be,
-/// but since Pos is bounded (u64::MIN, u64::MAX) it is at least a Monoid
+/// I'm not sure what the invariants of Add are supBytePosed to be,
+/// but since BytePos is bounded (u64::MIN, u64::MAX) it is at least a Monoid
 impl Add<Span> for Span {
     type Output = Span;
     fn add(self, other: Span) -> Span {
@@ -130,15 +29,15 @@ impl Add<Span> for Span {
 }
 impl Span {
     /// Span ctor from inner values
-    pub fn new(lo: PosInner, hi: PosInner) -> Span {
+    pub fn new(lo: BytePosInner, hi: BytePosInner) -> Span {
         Span {
-            lo: Pos(lo),
-            hi: Pos(hi),
+            lo: BytePos(lo),
+            hi: BytePos(hi),
         }
     }
     /// makes a subspan from inside (`offset = span.lo`)
     /// Panics if begin and end are invalid
-    pub fn subspan(&self, begin: impl Into<Pos>, end: impl Into<Pos>) -> Span {
+    pub fn subspan(&self, begin: impl Into<BytePos>, end: impl Into<BytePos>) -> Span {
         let begin = begin.into();
         let end = end.into();
         assert!(end >= begin);
@@ -148,11 +47,11 @@ impl Span {
             hi: self.lo + end,
         }
     }
-    pub fn is_inbounds(&self, begin: Pos, end: Pos) -> bool {
+    pub fn is_inbounds(&self, begin: BytePos, end: BytePos) -> bool {
         begin <= self.lo && end >= self.hi && self.lo <= end && self.hi >= begin
         // redundant?
     }
-    pub fn contains(&self, p: Pos) -> bool {
+    pub fn contains(&self, p: BytePos) -> bool {
         self.lo <= p && self.hi >= p
     }
     /// computes length of the span
@@ -164,7 +63,7 @@ impl Span {
         self + other
     }
     /// removes the offset
-    pub fn correct(&self, offset: Pos) -> Span {
+    pub fn correct(&self, offset: BytePos) -> Span {
         assert!(offset <= self.lo);
         assert!(offset <= self.hi);
         span(self.lo - offset, self.hi - offset)
@@ -177,16 +76,24 @@ impl Span {
     }
     /// Identity for Span merging/addition
     pub const MEMPTY: Span = Span {
-        lo: Pos(PosInner::MAX),
-        hi: Pos(PosInner::MIN),
+        lo: BytePos(BytePosInner::MAX),
+        hi: BytePos(BytePosInner::MIN),
     };
     /// Annihilator for Span merging/addition
     pub const NIL: Span = Span {
-        lo: Pos(PosInner::MIN),
-        hi: Pos(PosInner::MAX),
+        lo: BytePos(BytePosInner::MIN),
+        hi: BytePos(BytePosInner::MAX),
     };
     pub fn is_nil(&self) -> bool {
         *self == Self::NIL
+    }
+    /// lo .. hi
+    pub fn as_range(&self) -> Range<usize> {
+        self.lo_as_usize() .. self.hi_as_usize()
+    }
+    /// lo ..= hi - 1
+    pub fn as_range_inc(&self) -> RangeInclusive<usize> {
+        self.lo_as_usize() ..= self.hi_as_usize() - 1
     }
 }
 impl std::fmt::Display for Span {
@@ -203,7 +110,7 @@ pub struct Spanned<T> {
 }
 
 impl<T> Spanned<T> {
-    pub fn new(node: T, lo: impl Into<Pos>, hi: impl Into<Pos>) -> Spanned<T> {
+    pub fn new(node: T, lo: impl Into<BytePos>, hi: impl Into<BytePos>) -> Spanned<T> {
         Spanned {
             node: node,
             span: Span {
@@ -212,7 +119,7 @@ impl<T> Spanned<T> {
             },
         }
     }
-    pub fn new_lit(node: T, lo: impl Into<Pos>, hi: impl Into<Pos>) -> Self {
+    pub fn new_lit(node: T, lo: impl Into<BytePos>, hi: impl Into<BytePos>) -> Self {
         Spanned {
             node: node,
             span: Span {
@@ -220,5 +127,10 @@ impl<T> Spanned<T> {
                 hi: hi.into(),
             },
         }
+    }
+}
+impl<T> AsRef<T> for Spanned<T> {
+    fn as_ref(&self) -> &T {
+        &self.node
     }
 }

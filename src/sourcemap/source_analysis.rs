@@ -1,6 +1,6 @@
-use crate::sourcemap::Pos;
+use crate::sourcemap::BytePos;
 
-pub unsafe fn anal_src_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
+pub unsafe fn anal_src_sse2(src: &str, offset: BytePos, lines: &mut Vec<BytePos>) {
     // see: https://doc.rust-lang.org/nightly/nightly-rustc/src/rustc_span/analyze_source_file.rs.html
     #[cfg(target_arch = "x86")]
     use std::arch::x86::*;
@@ -23,8 +23,8 @@ pub unsafe fn anal_src_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
         if lines_mask != 0 {
             // set the 16 irrelevant msb to '1'
             let mut lines_mask = 0xFFFF0000 | lines_mask as u32;
-            // + 1 because we want the position of the newline start, not the '\n' before
-            let offset = offset + Pos::from(chunk_index * CHUNK_SIZE + 1);
+            // + 1 because we want the BytePosition of the newline start, not the '\n' before
+            let offset = offset + BytePos::from(chunk_index * CHUNK_SIZE + 1);
 
             loop {
                 let i = lines_mask.trailing_zeros();
@@ -33,7 +33,7 @@ pub unsafe fn anal_src_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
                     break;
                 }
 
-                lines.push(Pos::from(i) + offset);
+                lines.push(BytePos::from(i) + offset);
                 lines_mask &= (!1) << i;
             }
             // done with this chunk
@@ -49,13 +49,13 @@ pub unsafe fn anal_src_sse2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
         anal_src_slow(
             &src[tail_start..],
             src.len() - tail_start,
-            Pos::from(tail_start) + offset,
+            BytePos::from(tail_start) + offset,
             lines,
         );
     }
 }
 
-pub unsafe fn anal_src_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
+pub unsafe fn anal_src_avx2(src: &str, offset: BytePos, lines: &mut Vec<BytePos>) {
     // see: https://doc.rust-lang.org/nightly/nightly-rustc/src/rustc_span/analyze_source_file.rs.html
     #[cfg(target_arch = "x86")]
     use std::arch::x86::*;
@@ -64,6 +64,7 @@ pub unsafe fn anal_src_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
 
     const CHUNK_SIZE: usize = 32;
     let src_bytes = src.as_bytes();
+    // @FIXME
     let chunk_count = src.len() / CHUNK_SIZE;
 
     for chunk_index in 0..chunk_count {
@@ -78,8 +79,8 @@ pub unsafe fn anal_src_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
         if lines_mask != 0 {
             // set the 16 irrelevant msb to '1'
             let mut lines_mask: u32 = std::mem::transmute(lines_mask);
-            // + 1 because we want the position of the newline start, not the '\n' before
-            let offset = offset + Pos::from(chunk_index * CHUNK_SIZE + 1);
+            // + 1 because we want the BytePosition of the newline start, not the '\n' before
+            let offset = offset + BytePos::from(chunk_index * CHUNK_SIZE + 1);
 
             loop {
                 let i = lines_mask.trailing_zeros();
@@ -88,7 +89,7 @@ pub unsafe fn anal_src_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
                     break;
                 }
 
-                lines.push(Pos::from(i) + offset);
+                lines.push(BytePos::from(i) + offset);
                 lines_mask &= (!1) << i;
             }
             // done with this chunk
@@ -104,19 +105,19 @@ pub unsafe fn anal_src_avx2(src: &str, offset: Pos, lines: &mut Vec<Pos>) {
         anal_src_slow(
             &src[tail_start..],
             src.len() - tail_start,
-            Pos::from(tail_start) + offset,
+            BytePos::from(tail_start) + offset,
             lines,
         );
     }
 }
 
-pub fn anal_src_slow(src: &str, len: usize, offset: Pos, lines: &mut Vec<Pos>) {
+pub fn anal_src_slow(src: &str, len: usize, offset: BytePos, lines: &mut Vec<BytePos>) {
     let src_bytes = src.as_bytes();
     for i in 0..len {
         let b = unsafe { *src_bytes.get_unchecked(i) };
         if b == b'\n' {
-            // + 1 because we want the position of the newline start, not the '\n' before
-            lines.push(Pos::from(i) + offset + 1);
+            // + 1 because we want the BytePosition of the newline start, not the '\n' before
+            lines.push(BytePos::from(i) + offset + 1);
         }
     }
 }
