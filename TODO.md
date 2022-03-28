@@ -7,3 +7,5 @@ It'd be nice to redesign everything, using types and consistency:
     - [ ] position relative to source_map
     - [ ] position relative to file
     - [x] ~~position in byte or character~~ -> `BytePos`
+### `output`
+- [ ] refactor `output/mod.rs` into a writer with state.

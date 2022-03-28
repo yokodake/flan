@@ -10,6 +10,7 @@ use crate::utils::RelativeSeek;
 
 /// write the terms to `to`.
 /// `start` is the current (starting) position in the Reader `from`
+/// returns the number of bytes read from the input
 pub fn write_terms<R: RelativeSeek + BufRead>(
     terms: &Terms,
     from: &mut R,
@@ -31,12 +32,13 @@ pub fn write_terms<R: RelativeSeek + BufRead>(
         }
         // @TODO check how much has been written
         pos += off as usize;
-        pos = write_term(t, from, to, pos, env)?;
+        pos += write_term(t, from, to, pos, env)?;
     }
-    Ok(pos)
+    Ok(pos - start)
 }
 
 /// `start` is the current (starting) position in the `from` Reader
+/// returns the number of bytes read from the input
 pub fn write_term<R: RelativeSeek + BufRead>(
     term: &Term,
     from: &mut R,
@@ -53,19 +55,22 @@ pub fn write_term<R: RelativeSeek + BufRead>(
             let mut buf = unsafe { Box::<[u8]>::new_uninit_slice(term.span.len()).assume_init() };
             from.read(&mut buf)?;
             to.write(&buf)?;
-            Ok(pos + term.span.len())
+            Ok(term.span.len())
         }
         TermK::Var(name) => match env.get_var(name) {
             Some(v) => {
                 to.write(v.as_bytes())?;
-                Ok(pos + term.span.len())
+                Ok(0)
             }
-            None if env.eflags().ignore_unset => Ok(pos), // FIXME verify if correct
+            None if env.eflags().ignore_unset => Ok(0), // @FIXME verify if correct
             None => panic!("fatal write error: var `{}` not found", name),
         },
         TermK::Dimension { name, children } => match env.get_dimension(name) {
             Some(dim) => match children.get(dim.decision as usize) {
-                Some(child) => write_terms(child, from, to, pos, env),
+                Some(child) if child.is_empty() => { Ok(0) },
+                Some(child) => {
+                    write_terms(child, from, to, pos, env)
+                },
                 None => panic!("fatal write error: OOB decision for `{}`", name),
             },
             None => panic!("fatal write error: dim `{}` not found", name),

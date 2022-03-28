@@ -272,3 +272,23 @@ fn regtest_escapes() {
     let ts = r_ts.unwrap();
     assert_eq!(expected, get_full_kinds(ts, src));
 }
+#[test]
+/// write_tests.rs::nested_dim failure
+fn regtest_nested_dim() {
+    let src = "#dim1{#dim0{yahallo##hello}###byebye!}#, #dim1{flan##remi}#";
+    let expected = 
+        vec![kdim("dim1", vec![vec![kdim("dim0", vec![vec![ktext("yahallo")],
+                                                      vec![ktext("hello")]
+                                                     ])],
+                               vec![ktext("byebye!")],
+                              ]),
+             ktext(", "),
+             kdim("dim1", vec![vec![ktext("flan")],
+                               vec![ktext("remi")]
+                              ]),
+            ];
+    let r_ts = parse_str(src);
+    assert!(r_ts.is_ok());
+    let ts = r_ts.unwrap();
+    assert_eq!(expected, get_full_kinds(ts, src));
+}

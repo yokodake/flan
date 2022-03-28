@@ -18,6 +18,7 @@ macro_rules! mock_env {
             ]),
             HashMap::from_iter(vec![
                 ("dim0".into(), Dim::new(0)),
+                ("dim1".into(), Dim::new(0)),
                 ("dim2".into(), Dim::new(2)),
             ]),
             Handler::new(ErrorFlags::default(), SrcMap::new()),
@@ -78,6 +79,18 @@ fn big_dim_txt() {
     let src = "#dim2{hello, world ## ignored ##hello, #$name#}# from 2hu";
     let actual = write_str(src, &mock_env!());
     assert_eq!("hello, flan from 2hu", actual);
+}
+#[test]
+fn multi_dim() {
+    let src = "#dim1{yahallo##hello}#, #dim1{flan##remi}#";
+    let actual = write_str(src, &mock_env!());
+    assert_eq!("yahallo, flan", actual);
+}
+#[test]
+fn nested_dim() {
+    let src = "#dim1{#dim0{yahallo##hello}###byebye!}#, #dim1{flan##remi}#";
+    let actual = write_str(src, &mock_env!());
+    assert_eq!("yahallo, flan", actual);
 }
 
 #[test]
