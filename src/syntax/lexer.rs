@@ -70,13 +70,6 @@ impl<'a> Lexer<'a> {
     fn peek0(&self) -> char {
         self.next.unwrap_or('\0')
     }
-    fn peek1(&self) -> char {
-        self.peek(0)
-    }
-    /// EXPENSIVE get the nth character without consuming any
-    fn peek(&self, n: usize) -> char {
-        self.src.clone().nth(n).unwrap_or('\0') // EOF
-    }
     /// bumps the src iterator, sets [`Self::current`] and [`Self::next`], increments [`Self::pos`] based on current.
     /// returns the [`Self::current`]
     fn bump(&mut self) -> Option<char> {
