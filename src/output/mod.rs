@@ -48,7 +48,8 @@ pub fn write_term<R: RelativeSeek + BufRead>(
     // @TODO use write_vectored?
     match &term.node {
         TermK::Text => {
-            // safe alternative?
+            // @FIXME this is not just unsafe but UNDEFINED BEHAVIOUR
+            //        cf. https://doc.rust-lang.org/core/mem/union.MaybeUninit.html#incorrect-usages-of-this-method-1
             let mut buf = unsafe { Box::<[u8]>::new_uninit_slice(term.span.len()).assume_init() };
             from.read(&mut buf)?;
             to.write(&buf)?;
@@ -59,7 +60,7 @@ pub fn write_term<R: RelativeSeek + BufRead>(
                 to.write(v.as_bytes())?;
                 Ok(pos + term.span.len())
             }
-            None if env.eflags().ignore_unset => Ok(pos),
+            None if env.eflags().ignore_unset => Ok(pos), // FIXME verify if correct
             None => panic!("fatal write error: var `{}` not found", name),
         },
         TermK::Dimension { name, children } => match env.get_dimension(name) {

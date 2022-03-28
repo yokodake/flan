@@ -44,7 +44,7 @@ fn skip_txt() {
 
     let src = "hello, world!";
     let (mut from, mut to) = (Cursor::new(src.as_bytes()), Cursor::new(Vec::new()));
-    let terms = vec![Term::new(TermK::Text, 0, 4), Term::new(TermK::Text, 6, 11)];
+    let terms = vec![Term::new(TermK::Text, 0, 5), Term::new(TermK::Text, 6, 12)];
     assert!(write_terms(&terms, &mut from, &mut to, 0, &mock_env!()).is_ok());
     let actual = std::str::from_utf8(to.get_ref()).unwrap();
     assert_eq!("hello world", actual);

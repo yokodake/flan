@@ -56,7 +56,7 @@ impl Span {
     }
     /// computes length of the span
     pub fn len(&self) -> usize {
-        (self.hi.0 - self.lo.0 + 1) as usize
+        (self.hi.0 - self.lo.0) as usize
     }
     /// merges two spans, same as `+` operator
     pub fn merge(self, other: Span) -> Span {

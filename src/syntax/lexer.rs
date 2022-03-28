@@ -12,15 +12,12 @@
 //! @TODO escape first whitespace after `#..{`, before `}#` and around `##`.  
 //! @TODO allow newline escapes inside dimensions
 
-#![allow(dead_code)]
 use core::str::Chars;
 
 use crate::error::Handler;
 use crate::sourcemap::{span, BytePos, Spanned};
-use crate::syntax;
 
 /// parser error
-type PError = syntax::Error;
 pub struct Lexer<'a> {
     /// error handling
     pub handler: &'a mut Handler,
@@ -154,9 +151,9 @@ impl<'a> Lexer<'a> {
     pub fn is_varsymbol(c: char) -> bool {
         c.is_alphanumeric() || VAR_SYMS.contains(&c)
     }
-    /// Makes a [`TokenK::Text`] from `start` to `self.pos - 1`
+    /// Makes a [`TokenK::Text`] from `start` to `self.pos`, i.e. all of the Text has been "consumed"
     pub fn lex_txt(&self, start: BytePos) -> Token {
-        Token::new(Text, start, self.pos - 1)
+        Token::new(Text, start, self.pos)
     }
     pub fn lex_var(&mut self, start: BytePos) -> Token {
         let mut ill_char = false;
@@ -168,7 +165,7 @@ impl<'a> Lexer<'a> {
                 continue;
             } else if c == '#' {
                 self.bump(); // eat it
-                return Token::new(Var, start, self.pos - 1);
+                return Token::new(Var, start, self.pos);
             } else if c.is_whitespace() {
                 self.handler
                     .error("Non-terminated variable. Expected `#`, Found whitespace instead.")
@@ -177,6 +174,7 @@ impl<'a> Lexer<'a> {
                     .note("Variables have the following syntax: `#$variable#`")
                     .print();
                 // return a wrong Var token, consumer of the TokenStream should check errors
+                // @FIXME why did I do this again?
                 return Token::new(Var, start, self.pos);
             } else if !ill_char {
                 // if we get none-whitespace illegal characters, and the variable token is still correctly terminated
@@ -193,12 +191,13 @@ impl<'a> Lexer<'a> {
             .error("Non-terminated variable, expected `#`.")
             .with_span(span(start, start + 2))
             .at_span("variable starts here")
-            .note("Variables have the following syntax: `#$variable#`")
+            .note("Variables have the following syntax: `#$VAR_NAME#`")
             .print();
         self.failure = true;
         // aborting here should be necessary because we're already at the end of the stream.
         // but dunno of a clean way
-        Token::new(Var, start, self.pos - 1)
+        assert!(false);
+        Token::new(Var, start, self.pos)
     }
     pub fn lex_opend_maybe(&mut self, start: BytePos) -> Option<Token> {
         // eat opening '#'
@@ -209,7 +208,7 @@ impl<'a> Lexer<'a> {
             } else if c == '{' {
                 self.bump(); // eat '{'
                 self.nest += 1;
-                return Some(Token::new(Opend, start, self.pos - 1));
+                return Some(Token::new(Opend, start, self.pos));
             } else {
                 return None;
             }
@@ -223,12 +222,12 @@ impl<'a> Lexer<'a> {
         self.bump(); // eat '}'
         self.bump(); // eat '#'
         self.nest = std::cmp::max(self.nest, 1) - 1;
-        Token::new(Closed, start, self.pos - 1)
+        Token::new(Closed, start, self.pos)
     }
     pub fn lex_sepd(&mut self, start: BytePos) -> Token {
         self.bump(); // eat the '#'
         self.bump(); // eat the '#'
-        Token::new(Sepd, start, self.pos - 1)
+        Token::new(Sepd, start, self.pos)
     }
 
     fn identifier_note() -> String {

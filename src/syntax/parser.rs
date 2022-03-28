@@ -16,6 +16,7 @@
 //! A whole lot of ascii symbols are accepted in identifiers, probably too much, but we can and I figured it might
 //! be interresting to have variables names of paths to contain slashes for example.
 use std::collections::VecDeque;
+use std::ops::Range;
 
 use crate::error::Handler;
 use crate::sourcemap::{BytePos, Span, Spanned};
@@ -106,7 +107,7 @@ impl Parser<'_> {
         let lo = self.src_idx(self.current_token.span.lo);
         let hi = self.src_idx(self.current_token.span.hi);
         // @SAFETY: span is guaranteed to be valid by lexer
-        let name = unsafe { self.src.get_unchecked(lo + 2..hi) };
+        let name = unsafe { self.src.get_unchecked(Self::var_name_range(lo..hi)) };
         Ok(Term::var(name.into(), self.current_token.span))
     }
     pub fn parse_txt(&self) -> Parsed<Term> {
@@ -131,9 +132,9 @@ impl Parser<'_> {
         let lo = self.src_idx(self.current_token.span.lo);
         let hi = self.src_idx(self.current_token.span.hi);
         // @TODO use get_unchecked instead?
-        match self.src.get(lo + 1..hi).map(String::from) {
+        match self.src.get(Self::dim_name_range(lo..hi)).map(String::from) {
             Some(s) => s,
-            None => String::from(""),
+            None => unreachable!("empty dimension name"),
         }
     }
     pub fn parse_dim(&mut self) -> Parsed<Term> {
@@ -185,6 +186,14 @@ impl Parser<'_> {
     fn src_idx(&self, p: BytePos) -> usize {
         (p - self.offset).as_usize()
     }
+    /// get the span of the actual name of the variable
+    pub fn var_name_range(span: Range<usize>) -> Range<usize> { 
+        span.start + 2 .. span.end - 1
+    }
+    /// get the span of the actual name of the dimension
+    pub fn dim_name_range(span: Range<usize>) -> Range<usize> {
+        span.start + 1 .. span.end - 1
+    }
 }
 
 /// a Variable or Dimension name.
@@ -231,11 +240,21 @@ impl Term {
             }
         }
     }
+    /// returns the span of the opening delimiter (dim name + open brace tokens)
     pub fn opend_span(&self) -> Option<Span> {
         match &self.node {
             TermK::Dimension { name, .. } => {
                 let s = self.span.subspan(0, name.len() + 1 /* { */);
                 Some(s)
+            }
+            _ => None,
+        }
+    }
+    /// returns the span of the text
+    pub fn txt_span(&self) -> Option<Span> {
+        match &self.node {
+            TermK::Text => {
+                Some(self.span)
             }
             _ => None,
         }
