@@ -61,11 +61,11 @@ fn main() {
     metrics.infer(start);
 
     hp.abort_if_err();
-    if flags.command == Command::Query || flags.command == Command::Query {
+    if flags.command == Command::Query || flags.command == Command::DryRun {
+        // @TODO --dry-run
         metrics.report();
         std::process::exit(SUCCESS);
     }
-
     let start = Instant::now();
     // the most important point about spawning these threads is to capture panics
     // without paying the cost of `catch_unwind`

@@ -5,16 +5,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{fs, io};
 
+use crate::cfg::{Choices, Index};
 use crate::env::{Dim, Env};
 use crate::error::{ErrorBuilder, Handler};
-use crate::output::write_terms;
+use crate::output::{write_terms, WriteCtx, ReadCtx};
 use crate::sourcemap::{SrcFile, SrcMap};
 use crate::syntax::*;
 use crate::{cfg, infer};
-use crate::{
-    cfg::{Choices, Index},
-    utils::RelativeSeek,
-};
 
 /* infer */
 
@@ -296,16 +293,14 @@ pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io:
     use crate::sourcemap::SourceInfo;
     use std::io::{BufRead, Cursor};
 
-    trait SrcReader: RelativeSeek + BufRead {}
-    impl<T: BufRead + RelativeSeek> SrcReader for T {}
-
-    let mut reader: Box<dyn SrcReader> = if file.is_stdin() {
+    let mut reader: Box<dyn BufRead> = if file.is_stdin() {
         let src = match &file.src {
             SourceInfo::Source(s) => Cursor::new(s.as_bytes()),
             SourceInfo::Binary => panic!("cannot read form binary input in <stdin>"),
         };
         Box::new(io::BufReader::new(src))
     } else {
+        // @FIXME Why? if the Source is already loaded in memory, why don't we re-use it? much faster than reading from disk.
         Box::new(io::BufReader::new(fs::File::open(&file.path)?))
     };
     let dest = &file.destination;
@@ -316,12 +311,15 @@ pub fn write(flags: &cfg::Flags, file: SrcFile, terms: &Terms, env: &Env) -> io:
         );
         return Err(io::Error::new(io::ErrorKind::AlreadyExists, msg));
     }
+    // @FIXME use a value instead of "<stdout>"
     let mut out_f : Box<dyn io::Write> = if file.destination == PathBuf::from("<stdout>") {
         Box::new(io::stdout())
     } else {
         Box::new(fs::File::create(dest)?)
     };
-    write_terms(terms, &mut reader, &mut out_f, file.start.as_usize(), env)?;
+    let mut rdr = ReadCtx::new(&mut reader, file.start);
+    let mut wtr = WriteCtx::new(&mut out_f);
+    write_terms(&mut rdr, &mut wtr, env, terms)?;
     Ok(())
 }
 
@@ -343,8 +341,8 @@ pub fn clean(paths: Vec<&Path>) {
 fn mk_path(prefix: Option<&PathBuf>, path: PathBuf) -> PathBuf {
     if path == PathBuf::from("<stdin>") || path == PathBuf::from("<stdout>") {
         path
-    } else if prefix.is_some() {
-        prefix.unwrap().join(path)
+    } else if let Some(prefix) = prefix {
+        prefix.join(path)
     } else {
         path
     }

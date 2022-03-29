@@ -1,10 +1,11 @@
 #![allow(dead_code)]
-use std::io::Cursor;
+use std::io::{Cursor, BufRead, Write, self};
 
 use flan::driver::*;
 use flan::env::Env;
 use flan::error::{ErrorFlags, Handler};
-use flan::output::write_terms;
+use flan::output::{ReadCtx, WriteCtx};
+use flan::output;
 use flan::sourcemap::{Spanned, SrcMap};
 use flan::syntax::lexer::{Token, TokenK};
 use flan::syntax::{Parsed, TermK, Terms, Name};
@@ -103,6 +104,11 @@ pub fn write_str<'a>(src: &'a str, env: &Env) -> String {
         t.unwrap()
     };
     let (mut from, mut to) = (Cursor::new(src.as_bytes()), Cursor::new(vec![]));
-    assert!(write_terms(&terms, &mut from, &mut to, 0, env).is_ok());
+    assert!(write_terms(&mut from, 0usize, &mut to, env, &terms).is_ok());
     return std::str::from_utf8(to.get_ref()).unwrap().into();
+}
+
+pub fn write_terms<R, W>(from: &mut R, start: impl Into<usize>, to: &mut W, env: &Env, terms: &Terms) -> io::Result<()> 
+where R: BufRead, W : Write {
+    output::write_terms(&mut ReadCtx::new(from, start), &mut WriteCtx::new(to), env, terms)
 }

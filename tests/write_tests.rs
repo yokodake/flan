@@ -3,11 +3,10 @@ use std::iter::FromIterator;
 
 use flan::env::{Dim, Env};
 use flan::error::{ErrorFlags, Handler};
-use flan::output::write_terms;
 use flan::sourcemap::SrcMap;
 
 mod utils;
-use utils::write_str;
+use utils::{write_str, write_terms};
 
 macro_rules! mock_env {
     () => {
@@ -46,7 +45,7 @@ fn skip_txt() {
     let src = "hello, world!";
     let (mut from, mut to) = (Cursor::new(src.as_bytes()), Cursor::new(Vec::new()));
     let terms = vec![Term::new(TermK::Text, 0, 5), Term::new(TermK::Text, 6, 12)];
-    assert!(write_terms(&terms, &mut from, &mut to, 0, &mock_env!()).is_ok());
+    assert!(write_terms(&mut from, 0usize, &mut to, &mock_env!(), &terms).is_ok());
     let actual = std::str::from_utf8(to.get_ref()).unwrap();
     assert_eq!("hello world", actual);
 }
@@ -95,23 +94,23 @@ fn nested_dim() {
 
 #[test]
 fn escapes() {
-    let src = "good morning, #$name# \\\\o \\#ItBack";
-    let expected = "good morning, flan \\o #ItBack";
+    let src = r#"good morning, #$name# \\o \#ItBack"#;
+    let expected = r#"good morning, flan \o #ItBack"#;
     let actual = write_str(src, &mock_env!());
     assert_eq!(expected, actual);
 }
 
 #[test]
 fn escape_end() {
-    let src = "\\# \\#";
+    let src = r#"\# \#"#;
     let expected = "# #";
     let actual = write_str(src, &mock_env!());
     assert_eq!(expected, actual);
-    let src = "\\\\ \\\\";
-    let expected = "\\ \\";
+    let src = r#"\\ \\"#;
+    let expected = r#"\ \"#;
     let actual = write_str(src, &mock_env!());
     assert_eq!(expected, actual);
-    let src = "\\} \\}";
+    let src = r#"\} \}"#;
     let expected = "} }";
     let actual = write_str(src, &mock_env!());
     assert_eq!(expected, actual);

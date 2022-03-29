@@ -22,6 +22,20 @@ macro_rules! BytePos_from {
 }
 BytePos_from!( i32 u32 u64 i64 usize isize );
 
+/// Won't deal with size errors for now
+macro_rules! BytePos_into {
+    ( $($TY: ty )+ ) => {
+        $(
+        impl Into<$TY> for BytePos {
+            fn into(self) -> $TY {
+                self.0 as $TY
+            }
+        }
+        )+
+    }
+}
+BytePos_into!( u64 usize );
+
 impl BytePos {
     pub fn as_usize(&self) -> usize {
         self.0 as usize
